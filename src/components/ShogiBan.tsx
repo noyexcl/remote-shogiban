@@ -28,9 +28,8 @@ const PIECE_CONTAINER_STYLE = "w-[55px] h-[55px] absolute cursor-grab select-non
 const ShogiBan = ({ kifu }: ShogiBanProps) => {
     const [selected, setSelected] = useState<[number, number] | null>(null);
     const [tesuu, setTesuu] = useState<number>(0);
-    const [branches, setBranches] = useState<Record<number, number>>({});
-    const [path, setPath] = useState<number[]>([0]);
-    const [kyokumen, setKyokumen] = useState<Kyokumen>(kifu.getKyokumen(0, {}));
+    const [path, setPath] = useState<number[]>(Array(500).fill(0));
+    const [kyokumen, setKyokumen] = useState<Kyokumen>(kifu.getKyokumen([]));
 
     const handleMasuClick = (row: number, col: number) => {
         const targetKoma = kyokumen.ban[row][col];
@@ -43,20 +42,21 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
             // 2. Try to move
             const [selRow, selCol] = selected;
             try {
-                const [legal, canPromote] = kifu.isLegal(tesuu, branches, selRow, selCol, row, col);
+                const [legal, canPromote] = kifu.isLegal(path.slice(0, tesuu), selRow, selCol, row, col);
                 // TODO: show promote dialog if canPromote is true
 
                 if (legal) {
-                    const nextBranchIdx = kifu.addSashite(tesuu, branches, selRow, selCol, row, col, false);
-                    if (nextBranchIdx !== 0) {
-                        setBranches({ ...branches, [tesuu]: nextBranchIdx });
-                        setKyokumen(kifu.getKyokumen(tesuu + 1, { ...branches, [tesuu]: nextBranchIdx }));
-                    } else {
-                        setKyokumen(kifu.getKyokumen(tesuu + 1, branches));
+                    const nextBranchIdx = kifu.addSashite(path.slice(0, tesuu), selRow, selCol, row, col, false);
+
+                    if (nextBranchIdx !== path[tesuu]) {
+                        switchPath(path, tesuu, nextBranchIdx);
+                        setPath(path);
                     }
 
                     setSelected(null);
                     setTesuu(tesuu + 1);
+                    setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
+
                 } else {
                     // Invalid move, ignore (or could show feedback)
                 }
@@ -70,20 +70,22 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
 
     const handleListClick = (index: number) => {
         setTesuu(index);
-        setKyokumen(kifu.getKyokumen(index, branches));
+        setKyokumen(kifu.getKyokumen(path.slice(0, index)));
         setSelected(null);
     };
 
     const handleBranchClick = (branchIdx: number) => {
-        const newBranches = { ...branches, [tesuu]: branchIdx };
-        const nextTesuu = tesuu + 1;
-        setBranches(newBranches);
-        setTesuu(nextTesuu);
-        setKyokumen(kifu.getKyokumen(nextTesuu, newBranches));
+        if (branchIdx !== path[tesuu]) {
+            switchPath(path, tesuu, branchIdx);
+            setPath(path);
+        }
+
+        setTesuu(tesuu + 1);
+        setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
         setSelected(null);
     };
 
-    const [sashiteList, branchMap] = kifu.getSashiteList(branches);
+    const [sashiteList, branchMap] = kifu.getSashiteList(path);
     const currentBranches = branchMap[tesuu] || [];
 
     const getKomaImageUrl = (koma: Koma): string => {
@@ -167,7 +169,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                 {sashiteList.map((s, i) => (
                     <div
                         key={i}
-                        className={`${LIST_ITEM_STYLE} ${i === tesuu ? LIST_ITEM_SELECTED_STYLE : ''} ${i in branches ? 'bg-red-500' : ''}`}
+                        className={`${LIST_ITEM_STYLE} ${i === tesuu ? LIST_ITEM_SELECTED_STYLE : ''} ${path[i] !== 0 ? 'bg-red-500' : ''}`}
                         onClick={() => handleListClick(i)}
                     >
                         <span className={LIST_INDEX_STYLE}>{i}</span>
@@ -186,7 +188,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                 {currentBranches.map((s, i) => (
                     <div
                         key={i}
-                        className={`${LIST_ITEM_STYLE} ${branches[tesuu] === i || (!branches[tesuu] && i === 0) ? 'bg-sky-100 font-semibold' : ''}`}
+                        className={`${LIST_ITEM_STYLE} ${path[tesuu] === i || (!path[tesuu] && i === 0) ? 'bg-sky-100 font-semibold' : ''}`}
                         onClick={() => handleBranchClick(i)}
                     >
                         <span className={LIST_INDEX_STYLE}>{i + 1}</span>
@@ -202,5 +204,16 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
         </div>
     );
 };
+
+function switchPath(path: number[], at: number, idx: number) {
+    path[at] = idx;
+
+    for (let i = at + 1; i < path.length; i++) {
+        path[i] = 0;
+    }
+
+    return path;
+}
+
 
 export default ShogiBan;

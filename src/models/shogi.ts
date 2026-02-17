@@ -65,54 +65,34 @@ export class Kifu {
      * 
      * If n == 0, return the start kyokumen. (0手目 is treated as a move that does nothing))
      */
-    getKyokumen(n: number, branches: Record<number, number>): Kyokumen {
+    getKyokumen(path: number[]): Kyokumen {
         const kyokumen = this.startKyokumen.clone();
         let sashite = this.root;
 
-        while (1) {
+        for (const idx of path) {
+            if (sashite.next.length <= idx) {
+                throw new Error(`Tried to move into 変化${idx + 1} at ${sashite.tesuu}手目 but it does not exist`);
+            }
+
+            sashite = sashite.next[idx];
+
             if (!kyokumen.isLegal(sashite.fromRow, sashite.fromCol, sashite.toRow, sashite.toCol)) {
                 throw new Error(`Invalid sashite: ${sashite.tesuu}手目, from(${sashite.fromRow}, \
                     ${sashite.fromCol}) to(${sashite.toRow}, ${sashite.toCol}) ${sashite.komaKind} `);
             }
 
             kyokumen.move(sashite);
-
-            if (sashite.tesuu === n) {
-                break;
-            }
-
-            let idx = 0;
-            if (sashite.tesuu in branches) {
-                idx = branches[sashite.tesuu];
-            }
-
-            if (!sashite.next[idx]) {
-                throw new Error(`There are no sashites after ${sashite.tesuu}手目 \
-                    (branches: ${JSON.stringify(branches)})`);
-            }
-
-            sashite = sashite.next[idx];
         }
 
         return kyokumen;
     }
 
-    getSashite(tesuu: number, branches: Record<number, number>): Sashite {
+    getSashite(path: number[]): Sashite {
         let sashite = this.root;
 
-        while (1) {
-            if (sashite.tesuu === tesuu) {
-                break;
-            }
-
-            let idx = 0;
-            if (sashite.tesuu in branches) {
-                idx = branches[sashite.tesuu];
-            }
-
-            if (!sashite.next[idx]) {
-                throw new Error(`There are no sashites after ${sashite.tesuu}手目 \
-                    (branches: ${JSON.stringify(branches)})`);
+        for (const idx of path) {
+            if (sashite.next.length <= idx) {
+                throw new Error(`Tried to move into 変化${idx + 1} at ${sashite.tesuu}手目 but it does not exist`);
             }
 
             sashite = sashite.next[idx];
@@ -121,8 +101,8 @@ export class Kifu {
         return sashite;
     }
 
-    isLegal(tesuu: number, branches: Record<number, number>, fromRow: number, fromCol: number, toRow: number, toCol: number): [boolean, boolean] {
-        const kyokumen = this.getKyokumen(tesuu, branches);
+    isLegal(path: number[], fromRow: number, fromCol: number, toRow: number, toCol: number): [boolean, boolean] {
+        const kyokumen = this.getKyokumen(path);
 
         const legal = kyokumen.isLegal(fromRow, fromCol, toRow, toCol);
 
@@ -137,9 +117,8 @@ export class Kifu {
         return [legal, false];
     }
 
-    addSashite(tesuu: number, branches: Record<number, number>, fromRow: number, fromCol: number, toRow: number, toCol: number, promote: boolean): number {
-        // If the sashite already exists, return the index.
-        const targetSashite = this.getSashite(tesuu, branches);
+    addSashite(path: number[], fromRow: number, fromCol: number, toRow: number, toCol: number, promote: boolean): number {
+        const targetSashite = this.getSashite(path);
 
         for (let i = 0; i < targetSashite.next.length; i++) {
             const s = targetSashite.next[i];
@@ -148,10 +127,10 @@ export class Kifu {
             }
         }
 
-        const kyokumen = this.getKyokumen(tesuu, branches);
+        const kyokumen = this.getKyokumen(path);
 
         if (!kyokumen.isLegal(fromRow, fromCol, toRow, toCol)) {
-            throw new Error(`Invalid sashite: ${tesuu}手目, from(${fromRow}, \\
+            throw new Error(`Invalid sashite: ${path.length + 1}手目, from(${fromRow}, \\
                     ${fromCol}) to(${toRow}, ${toCol}) ${promote ? "+" : ""}`);
         }
 
@@ -185,22 +164,21 @@ export class Kifu {
             komaKind,
             promote,
             comment: "",
-            tesuu: tesuu + 1,
+            tesuu: path.length + 1,
             next: []
         });
 
         return targetSashite.next.length - 1;
     }
 
-    getSashiteList(branches: Record<number, number>): [string[], Record<number, string[]>] {
+    getSashiteList(path: number[]): [string[], Record<number, string[]>] {
         const list = [];
         const branchList: Record<number, string[]> = {};
 
         let currentSashite = this.root;
+        list.push(fmtSashite(currentSashite))
 
-        while (1) {
-            list.push(fmtSashite(currentSashite));
-
+        for (const idx of path) {
             if (currentSashite.next.length === 0) {
                 break;
             }
@@ -213,17 +191,12 @@ export class Kifu {
                 });
             }
 
-            let idx = 0;
-            if (currentSashite.tesuu in branches) {
-                idx = branches[currentSashite.tesuu];
-            }
-
-            if (!currentSashite.next[idx]) {
-                throw new Error(`There are no sashites after ${currentSashite.tesuu}手目 \
-                    (branches: ${JSON.stringify(branches)})`);
+            if (idx >= currentSashite.next.length) {
+                throw new Error(`While making sashite list, at ${currentSashite.tesuu}手目, tried to move into 変化${idx + 1} that doesn't exist`);
             }
 
             currentSashite = currentSashite.next[idx];
+            list.push(fmtSashite(currentSashite));
         }
 
         return [list, branchList];
@@ -420,89 +393,6 @@ export class Kyokumen {
         }
     }
 
-    isLegal2(sashite: Sashite): boolean {
-        // 0手目 is always legal
-        if (sashite.fromRow === -255) return true;
-
-        const koma = this.ban[sashite.fromRow][sashite.fromCol];
-        if (!koma) return false;
-        if (koma.owner !== this.teban) return false;
-
-        const target = this.ban[sashite.toRow][sashite.toCol];
-        if (target && target.owner === koma.owner) return false;
-
-        const rowDiff = sashite.toRow - sashite.fromRow;
-        const colDiff = sashite.toCol - sashite.fromCol;
-        const forward = koma.owner === "Sente" ? -1 : 1;
-
-        // Basic movement rules (simplified for now, covering main pieces)
-        // TODO: Add promotion rules and full movement validation for all pieces
-        switch (koma.kind) {
-            case "FU":
-                return colDiff === 0 && rowDiff === forward;
-            case "KY":
-                if (colDiff !== 0) return false;
-                if (forward === -1) {
-                    if (rowDiff >= 0) return false; // Must move forward (negative rowDiff for Sente)
-                    // Check for obstacles
-                    for (let r = sashite.fromRow - 1; r > sashite.toRow; r--) {
-                        if (this.ban[r][sashite.fromCol]) return false;
-                    }
-                    return true;
-                } else {
-                    if (rowDiff <= 0) return false; // Must move forward (positive rowDiff for Gote)
-                    // Check for obstacles
-                    for (let r = sashite.fromRow + 1; r < sashite.toRow; r++) {
-                        if (this.ban[r][sashite.fromCol]) return false;
-                    }
-                    return true;
-                }
-            case "KE":
-                return Math.abs(colDiff) === 1 && rowDiff === forward * 2;
-            case "GI":
-                // Forward, Forward-Left, Forward-Right, Backward-Left, Backward-Right
-                if (Math.abs(rowDiff) > 1 || Math.abs(colDiff) > 1) return false;
-                if (rowDiff === forward && Math.abs(colDiff) <= 1) return true; // Forward 3 directions
-                if (rowDiff === -forward && Math.abs(colDiff) === 1) return true; // Backward diagonals
-                return false;
-            case "KI":
-                // Forward 3 dirs, Side 2 dirs, Backward 1 dir
-                if (Math.abs(rowDiff) > 1 || Math.abs(colDiff) > 1) return false;
-                if (rowDiff === forward && Math.abs(colDiff) <= 1) return true; // Forward 3
-                if (rowDiff === 0 && Math.abs(colDiff) === 1) return true; // Sides
-                if (rowDiff === -forward && colDiff === 0) return true; // Backward straight
-                return false;
-            case "KA":
-                if (Math.abs(rowDiff) !== Math.abs(colDiff)) return false;
-                // Check path
-                const rStep = rowDiff > 0 ? 1 : -1;
-                const cStep = colDiff > 0 ? 1 : -1;
-                for (let i = 1; i < Math.abs(rowDiff); i++) {
-                    if (this.ban[sashite.fromRow + i * rStep][sashite.fromCol + i * cStep]) return false;
-                }
-                return true;
-            case "HI":
-                if (rowDiff !== 0 && colDiff !== 0) return false;
-                // Check path
-                if (rowDiff !== 0) {
-                    const rStep = rowDiff > 0 ? 1 : -1;
-                    for (let i = 1; i < Math.abs(rowDiff); i++) {
-                        if (this.ban[sashite.fromRow + i * rStep][sashite.fromCol]) return false;
-                    }
-                } else {
-                    const cStep = colDiff > 0 ? 1 : -1;
-                    for (let i = 1; i < Math.abs(colDiff); i++) {
-                        if (this.ban[sashite.fromRow][sashite.fromCol + i * cStep]) return false;
-                    }
-                }
-                return true;
-            case "OU":
-                return Math.abs(rowDiff) <= 1 && Math.abs(colDiff) <= 1;
-            default:
-                return false;
-        }
-    }
-
     move(sashite: Sashite) {
         /*
         if (!this.isLegal(sashite)) {
@@ -540,37 +430,6 @@ export class Kyokumen {
         this.teban = this.teban === "Sente" ? "Gote" : "Sente";
 
         this.lastSashite = sashite;
-    }
-
-    move2(fromRow: number, fromCol: number, toRow: number, toCol: number) {
-        if (!this.isLegal(fromRow, fromCol, toRow, toCol)) {
-            throw new Error("Invalid move");
-        }
-
-        const koma = this.ban[fromRow][fromCol];
-        if (!koma) {
-            throw new Error("No piece to move");
-        }
-
-        const target = this.ban[toRow][toCol];
-        if (target) {
-            // Capture
-            const capturedKind = unpromote(target.kind); // Promoted pieces revert to original kind when captured
-            const owner = koma.owner;
-            const komadai = owner === "Sente" ? this.komadaiSente : this.komadaiGote;
-
-            if (capturedKind in komadai) {
-                komadai[capturedKind]++;
-            }
-        }
-
-        this.ban[toRow][toCol] = {
-            ...koma,
-        };
-        this.ban[fromRow][fromCol] = null;
-
-        // Toggle turn
-        this.teban = this.teban === "Sente" ? "Gote" : "Sente";
     }
 
     isLegal(fromRow: number, fromCol: number, toRow: number, toCol: number): boolean {
