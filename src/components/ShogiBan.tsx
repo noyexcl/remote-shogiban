@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Kyokumen } from '../models/shogi';
 import type { Kifu, Koma } from "../models/shogi"
 
@@ -21,6 +21,9 @@ const MASU_SELECTED_STYLE = "!bg-[#ffcc00] !border-2 !border-[#ff0000]";
 const MASU_LAST_MOVE_FROM_STYLE = "!bg-cyan-100/60";
 const MASU_LAST_MOVE_TO_STYLE = "!bg-cyan-200/80";
 
+const CONTEXT_MENU_STYLE = "fixed bg-white border border-[#ccc] shadow-lg rounded-sm py-1 z-50 min-w-[120px] text-sm";
+const CONTEXT_MENU_ITEM_STYLE = "px-4 py-1.5 cursor-pointer hover:bg-sky-50 transition-colors flex items-center gap-2";
+
 const PIECE_CONTAINER_STYLE = "w-[55px] h-[55px] absolute cursor-grab select-none active:cursor-grabbing group max-sm:w-[38px] max-sm:h-[38px]";
 
 
@@ -30,6 +33,27 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
     const [tesuu, setTesuu] = useState<number>(0);
     const [path, setPath] = useState<number[]>(Array(500).fill(0));
     const [kyokumen, setKyokumen] = useState<Kyokumen>(kifu.getKyokumen([]));
+    const [contextMenu, setContextMenu] = useState<{ x: number, y: number, targetTesuu: number } | null>(null);
+
+    const closeContextMenu = useCallback(() => {
+        setContextMenu(null);
+    }, []);
+
+    useEffect(() => {
+        if (contextMenu) {
+            window.addEventListener('click', closeContextMenu);
+            return () => window.removeEventListener('click', closeContextMenu);
+        }
+    }, [contextMenu, closeContextMenu]);
+
+    const handleKifuContextMenu = (e: React.MouseEvent, targetTesuu: number) => {
+        e.preventDefault();
+        setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            targetTesuu
+        });
+    };
 
     const handleMasuClick = (row: number, col: number) => {
         const targetKoma = kyokumen.ban[row][col];
@@ -84,6 +108,24 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
         setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
         setSelected(null);
     };
+
+    const handleDeleteSashite = (targetTesuu: number) => {
+        // Cannot delete the root sashite.
+        if (targetTesuu === 0) {
+            return;
+        }
+
+        kifu.removeSashite(path.slice(0, targetTesuu));
+
+        if (targetTesuu <= tesuu) {
+            setTesuu(targetTesuu - 1);
+        }
+
+        switchPath(path, targetTesuu - 1, 0);
+        setPath([...path]);
+        setKyokumen(kifu.getKyokumen(path.slice(0, targetTesuu - 1)));
+        setSelected(null);
+    }
 
     const [sashiteList, branchMap] = kifu.getSashiteList(path);
     const currentBranches = branchMap[tesuu] || [];
@@ -171,6 +213,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                         key={i}
                         className={`${LIST_ITEM_STYLE} ${i === tesuu ? LIST_ITEM_SELECTED_STYLE : ''} ${path[i] !== 0 ? 'bg-red-500' : ''}`}
                         onClick={() => handleListClick(i)}
+                        onContextMenu={(e) => handleKifuContextMenu(e, i)}
                     >
                         <span className={LIST_INDEX_STYLE}>{i}</span>
                         <span>{s}</span>
@@ -201,6 +244,24 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                     </div>
                 )}
             </div>
+
+            {contextMenu && (
+                <div
+                    className={CONTEXT_MENU_STYLE}
+                    style={{ top: contextMenu.y, left: contextMenu.x }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div
+                        className={CONTEXT_MENU_ITEM_STYLE}
+                        onClick={() => {
+                            handleDeleteSashite(contextMenu.targetTesuu);
+                            closeContextMenu();
+                        }}
+                    >
+                        <span className="text-red-600">指し手削除</span>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

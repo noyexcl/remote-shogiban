@@ -171,6 +171,31 @@ export class Kifu {
         return targetSashite.next.length - 1;
     }
 
+    /**
+     * Remove the sashite at the given path.
+     * 
+     * @param path The path to the sashite to remove.
+     */
+    removeSashite(path: number[]) {
+        if (path.length === 0) {
+            throw new Error("Cannot remove the root sashite");
+        }
+
+        const parentSashite = this.getSashite(path.slice(0, path.length - 1));
+
+        const targetIdx = path[path.length - 1];
+
+        parentSashite.next.splice(targetIdx, 1);
+    }
+
+
+    /**
+     * Following path, return the sashites in list.
+     * If there is a branch in the middle of the sequence, record it with the tesuu.
+     * 
+     * When it reaches the end node of the sashite tree, it will stop.
+     * In the other words, longer path than the actual path length doesn't matter.
+    */
     getSashiteList(path: number[]): [string[], Record<number, string[]>] {
         const list = [];
         const branchList: Record<number, string[]> = {};
