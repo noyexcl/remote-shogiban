@@ -5,6 +5,7 @@ interface KomadaiProps {
     komadai: KomaDai;
     selectedKind: KomaKind | null;
     onKomaClick: (kind: KomaKind) => void;
+    reverse: boolean;
 }
 
 const KOMADAI_STYLE = "w-[120px] h-[582px] bg-[#d4a574] border-[3px] border-[#333] p-2 flex flex-col shadow-md max-sm:w-full max-sm:h-auto max-sm:flex-row max-sm:flex-wrap";
@@ -32,7 +33,8 @@ const Komadai = ({ owner, komadai, selectedKind, onKomaClick }: KomadaiProps) =>
             case 'FU': name = 'fu'; break;
             default: name = 'fu';
         }
-        return `/koma/${name}_${p}.png`;
+        const suffix = p === 'sente' ? '' : '_rev';
+        return `/koma/${name}${suffix}.png`;
     };
 
     return (

@@ -174,7 +174,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                 case 'HI': name = 'ryu'; break;
                 case 'KA': name = 'uma'; break;
                 case 'FU': name = 'to'; break;
-                case 'KY': name = owner === 'sente' ? 'nari_kyou' : 'nari_kyo'; break;
+                case 'KY': name = 'nari_kyo'; break;
                 case 'KE': name = 'nari_kei'; break;
                 case 'GI': name = 'nari_kin'; break;
                 default: name = 'nari_kin';
@@ -191,7 +191,8 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                 case 'FU': name = 'fu'; break;
             }
         }
-        return `/koma/${name}_${owner}.png`;
+        const suffix = owner === 'sente' ? '' : '_rev';
+        return `/koma/${name}${suffix}.png`;
     };
 
     const renderKoma = (koma: Koma | null) => {
@@ -211,6 +212,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                     komadai={kyokumen.komadaiGote}
                     selectedKind={kyokumen.teban === 'Gote' ? selectedKomadai : null}
                     onKomaClick={handleKomadaiClick}
+                    reverse
                 />
 
                 <div className={BOARD_STYLE}>
@@ -242,6 +244,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                     komadai={kyokumen.komadaiSente}
                     selectedKind={kyokumen.teban === 'Sente' ? selectedKomadai : null}
                     onKomaClick={handleKomadaiClick}
+                    reverse={false}
                 />
             </div>
 
