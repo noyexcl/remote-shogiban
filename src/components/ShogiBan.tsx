@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Kyokumen } from '../models/shogi';
-import type { Kifu, Koma, KomaKind } from "../models/shogi"
+import type { Kifu, Koma, KomaKind, Player } from "../models/shogi"
 import Komadai from './Komadai';
+import { getKomaImageUrl } from '../util';
 
 interface ShogiBanProps {
     kifu: Kifu;
@@ -39,11 +40,12 @@ const KOMA_DROPRANGE_MAP: Record<string, number> = {
 
 const ShogiBan = ({ kifu }: ShogiBanProps) => {
     const [selected, setSelected] = useState<[number, number] | null>(null);
-    const [selectedKomadai, setSelectedKomadai] = useState<KomaKind | null>(null);
+    const [selectedKomadai, setSelectedKomadai] = useState<[KomaKind, Player] | null>(null);
     const [tesuu, setTesuu] = useState<number>(0);
     const [path, setPath] = useState<number[]>(Array(500).fill(0));
     const [kyokumen, setKyokumen] = useState<Kyokumen>(kifu.getKyokumen([]));
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, targetTesuu: number } | null>(null);
+    const [reversed, setReversed] = useState<boolean>(false);
 
     const closeContextMenu = useCallback(() => {
         setContextMenu(null);
@@ -101,7 +103,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
             }
         } else if (selectedKomadai) {
             // 3. Try to drop from komadai
-            const fromRow = KOMA_DROPRANGE_MAP[selectedKomadai];
+            const fromRow = KOMA_DROPRANGE_MAP[selectedKomadai[0]];
             if (fromRow !== undefined) {
                 try {
                     const [legal] = kifu.isLegal(path.slice(0, tesuu), fromRow, -1, row, col);
@@ -125,8 +127,8 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
         }
     };
 
-    const handleKomadaiClick = (kind: KomaKind) => {
-        setSelectedKomadai(kind);
+    const handleKomadaiClick = (kind: KomaKind, owner: Player) => {
+        setSelectedKomadai([kind, owner]);
         setSelected(null);
     };
 
@@ -165,41 +167,14 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
     const [sashiteList, branchMap] = useMemo(() => kifu.getSashiteList(path), [kifu, path]);
     const currentBranches = branchMap[tesuu] || [];
 
-    const getKomaImageUrl = (koma: Koma): string => {
-        const owner = koma.owner.toLowerCase();
-        let name = '';
-
-        if (koma.promoted) {
-            switch (koma.kind) {
-                case 'HI': name = 'ryu'; break;
-                case 'KA': name = 'uma'; break;
-                case 'FU': name = 'to'; break;
-                case 'KY': name = 'nari_kyo'; break;
-                case 'KE': name = 'nari_kei'; break;
-                case 'GI': name = 'nari_kin'; break;
-                default: name = 'nari_kin';
-            }
-        } else {
-            switch (koma.kind) {
-                case 'OU': name = owner === 'sente' ? 'ou' : 'gyoku'; break;
-                case 'HI': name = 'hi'; break;
-                case 'KA': name = 'kaku'; break;
-                case 'KI': name = 'kin'; break;
-                case 'GI': name = 'gin'; break;
-                case 'KE': name = 'kei'; break;
-                case 'KY': name = 'kyo'; break;
-                case 'FU': name = 'fu'; break;
-            }
-        }
-        const suffix = owner === 'sente' ? '' : '_rev';
-        return `/koma/${name}${suffix}.png`;
-    };
-
     const renderKoma = (koma: Koma | null) => {
         if (!koma) return null;
+
+        const r = reversed && koma.owner === 'Sente' || !reversed && koma.owner === 'Gote';
+
         return (
             <div className={PIECE_CONTAINER_STYLE} title={`${koma.owner} ${koma.kind}${koma.promoted ? '+' : ''}`}>
-                <img src={getKomaImageUrl(koma)} alt={koma.kind} className="w-full h-full object-contain" />
+                <img src={getKomaImageUrl(koma.kind, r)} alt={koma.kind} className="w-full h-full object-contain" />
             </div>
         );
     };
@@ -210,9 +185,9 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                 <Komadai
                     owner="Gote"
                     komadai={kyokumen.komadaiGote}
-                    selectedKind={kyokumen.teban === 'Gote' ? selectedKomadai : null}
+                    selectedKind={selectedKomadai}
                     onKomaClick={handleKomadaiClick}
-                    reverse
+                    reversed
                 />
 
                 <div className={BOARD_STYLE}>
@@ -244,7 +219,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                     komadai={kyokumen.komadaiSente}
                     selectedKind={kyokumen.teban === 'Sente' ? selectedKomadai : null}
                     onKomaClick={handleKomadaiClick}
-                    reverse={false}
+                    reversed={false}
                 />
             </div>
 
