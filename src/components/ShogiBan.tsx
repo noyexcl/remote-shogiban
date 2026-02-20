@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Kyokumen } from '../models/shogi';
-import type { Kifu, Koma } from "../models/shogi"
+import type { Kifu, Koma, KomaKind } from "../models/shogi"
+import Komadai from './Komadai';
 
 interface ShogiBanProps {
     kifu: Kifu;
 }
 
-const BOARD_STYLE = "inline-grid grid-cols-[repeat(9,60px)] grid-rows-[repeat(9,60px)] gap-px \
+const BOARD_STYLE = "grid grid-cols-[repeat(9,60px)] grid-rows-[repeat(9,60px)] gap-px \
 border-[3px] border-[#333] bg-[#d4a574] p-2.5 shadow-md max-sm:grid-cols-[repeat(9,40px)] max-sm:grid-rows-[repeat(9,40px)]";
 
 const MASU_STYLE = "w-[60px] h-[60px] bg-[#e8dcc8] border border-[#999] flex items-center justify-center relative \
@@ -26,10 +27,19 @@ const CONTEXT_MENU_ITEM_STYLE = "px-4 py-1.5 cursor-pointer hover:bg-sky-50 tran
 
 const PIECE_CONTAINER_STYLE = "w-[55px] h-[55px] absolute cursor-grab select-none active:cursor-grabbing group max-sm:w-[38px] max-sm:h-[38px]";
 
-
+const KOMA_DROPRANGE_MAP: Record<string, number> = {
+    "FU": -1,
+    "KY": -2,
+    "KE": -3,
+    "GI": -4,
+    "KI": -5,
+    "KA": -6,
+    "HI": -7
+};
 
 const ShogiBan = ({ kifu }: ShogiBanProps) => {
     const [selected, setSelected] = useState<[number, number] | null>(null);
+    const [selectedKomadai, setSelectedKomadai] = useState<KomaKind | null>(null);
     const [tesuu, setTesuu] = useState<number>(0);
     const [path, setPath] = useState<number[]>(Array(500).fill(0));
     const [kyokumen, setKyokumen] = useState<Kyokumen>(kifu.getKyokumen([]));
@@ -62,8 +72,9 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
         if (isOwnPiece) {
             // 1. Select own piece (or switch selection)
             setSelected([row, col]);
+            setSelectedKomadai(null);
         } else if (selected) {
-            // 2. Try to move
+            // 2. Try to move from board
             const [selRow, selCol] = selected;
             try {
                 const [legal, canPromote] = kifu.isLegal(path.slice(0, tesuu), selRow, selCol, row, col);
@@ -74,64 +85,88 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
 
                     if (nextBranchIdx !== path[tesuu]) {
                         switchPath(path, tesuu, nextBranchIdx);
-                        setPath(path);
+                        setPath([...path]);
                     }
 
                     setSelected(null);
                     setTesuu(tesuu + 1);
                     setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
-
                 } else {
-                    // Invalid move, ignore (or could show feedback)
+                    // Invalid move
+                    setSelected(null);
                 }
             } catch (e) {
                 console.error(e);
-                // Also invalid move
+                setSelected(null);
+            }
+        } else if (selectedKomadai) {
+            // 3. Try to drop from komadai
+            const fromRow = KOMA_DROPRANGE_MAP[selectedKomadai];
+            if (fromRow !== undefined) {
+                try {
+                    const [legal] = kifu.isLegal(path.slice(0, tesuu), fromRow, -1, row, col);
+                    if (legal) {
+                        const nextBranchIdx = kifu.addSashite(path.slice(0, tesuu), fromRow, -1, row, col, false);
+                        if (nextBranchIdx !== path[tesuu]) {
+                            switchPath(path, tesuu, nextBranchIdx);
+                            setPath([...path]);
+                        }
+                        setSelectedKomadai(null);
+                        setTesuu(tesuu + 1);
+                        setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
+                    } else {
+                        setSelectedKomadai(null);
+                    }
+                } catch (e) {
+                    console.error(e);
+                    setSelectedKomadai(null);
+                }
             }
         }
-        // 3. If empty/opponent and no selection -> do nothing (handled by default)
+    };
+
+    const handleKomadaiClick = (kind: KomaKind) => {
+        setSelectedKomadai(kind);
+        setSelected(null);
     };
 
     const handleListClick = (index: number) => {
         setTesuu(index);
         setKyokumen(kifu.getKyokumen(path.slice(0, index)));
         setSelected(null);
+        setSelectedKomadai(null);
     };
 
     const handleBranchClick = (branchIdx: number) => {
         if (branchIdx !== path[tesuu]) {
             switchPath(path, tesuu, branchIdx);
-            setPath(path);
+            setPath([...path]);
         }
 
         setTesuu(tesuu + 1);
         setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
         setSelected(null);
+        setSelectedKomadai(null);
     };
 
     const handleDeleteSashite = (targetTesuu: number) => {
-        // Cannot delete the root sashite.
-        if (targetTesuu === 0) {
-            return;
-        }
-
+        if (targetTesuu === 0) return;
         kifu.removeSashite(path.slice(0, targetTesuu));
-
         if (targetTesuu <= tesuu) {
             setTesuu(targetTesuu - 1);
+            setKyokumen(kifu.getKyokumen(path.slice(0, targetTesuu - 1)));
         }
-
         switchPath(path, targetTesuu - 1, 0);
         setPath([...path]);
-        setKyokumen(kifu.getKyokumen(path.slice(0, targetTesuu - 1)));
         setSelected(null);
+        setSelectedKomadai(null);
     }
 
-    const [sashiteList, branchMap] = kifu.getSashiteList(path);
+    const [sashiteList, branchMap] = useMemo(() => kifu.getSashiteList(path), [kifu, path]);
     const currentBranches = branchMap[tesuu] || [];
 
     const getKomaImageUrl = (koma: Koma): string => {
-        const owner = koma.owner.toLowerCase(); // 'sente' or 'gote'
+        const owner = koma.owner.toLowerCase();
         let name = '';
 
         if (koma.promoted) {
@@ -141,8 +176,8 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                 case 'FU': name = 'to'; break;
                 case 'KY': name = owner === 'sente' ? 'nari_kyou' : 'nari_kyo'; break;
                 case 'KE': name = 'nari_kei'; break;
-                case 'GI': name = 'nari_kin'; break; // Assuming nari_kin is for GI promotion
-                default: name = 'nari_kin'; // Fallback
+                case 'GI': name = 'nari_kin'; break;
+                default: name = 'nari_kin';
             }
         } else {
             switch (koma.kind) {
@@ -156,93 +191,101 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                 case 'FU': name = 'fu'; break;
             }
         }
-
         return `/koma/${name}_${owner}.png`;
     };
 
     const renderKoma = (koma: Koma | null) => {
         if (!koma) return null;
-
         return (
-            <div
-                className={PIECE_CONTAINER_STYLE}
-                title={`${koma.owner} ${koma.kind}${koma.promoted ? '+' : ''}`}
-            >
-                <img
-                    src={getKomaImageUrl(koma)}
-                    alt={koma.kind}
-                    className="w-full h-full object-contain"
-                />
+            <div className={PIECE_CONTAINER_STYLE} title={`${koma.owner} ${koma.kind}${koma.promoted ? '+' : ''}`}>
+                <img src={getKomaImageUrl(koma)} alt={koma.kind} className="w-full h-full object-contain" />
             </div>
         );
     };
 
     return (
-        <div className="flex flex-wrap items-start justify-center">
-            <div className={BOARD_STYLE}>
-                {kyokumen.ban.map((row, rowIdx) => (
-                    <div key={rowIdx} className="contents">
-                        {row.map((masu, colIdx) => {
-                            const isSelected = selected?.[0] === rowIdx && selected?.[1] === colIdx;
-                            const selectedClass = isSelected ? MASU_SELECTED_STYLE : '';
+        <div className="flex flex-wrap items-start justify-center gap-4 p-4">
+            <div className="flex flex-row items-stretch gap-2">
+                <Komadai
+                    owner="Gote"
+                    komadai={kyokumen.komadaiGote}
+                    selectedKind={kyokumen.teban === 'Gote' ? selectedKomadai : null}
+                    onKomaClick={handleKomadaiClick}
+                />
 
-                            const isLastMoveFrom = kyokumen.lastSashite?.fromRow === rowIdx && kyokumen.lastSashite?.fromCol === colIdx;
-                            const isLastMoveTo = kyokumen.lastSashite?.toRow === rowIdx && kyokumen.lastSashite?.toCol === colIdx;
-                            const lastSashiteClass = isLastMoveTo ? MASU_LAST_MOVE_TO_STYLE : isLastMoveFrom ? MASU_LAST_MOVE_FROM_STYLE : '';
+                <div className={BOARD_STYLE}>
+                    {kyokumen.ban.map((row, rowIdx) => (
+                        <div key={rowIdx} className="contents">
+                            {row.map((masu, colIdx) => {
+                                const isSelected = selected?.[0] === rowIdx && selected?.[1] === colIdx;
+                                const selectedClass = isSelected ? MASU_SELECTED_STYLE : '';
+                                const isLastMoveFrom = kyokumen.lastSashite?.fromRow === rowIdx && kyokumen.lastSashite?.fromCol === colIdx;
+                                const isLastMoveTo = kyokumen.lastSashite?.toRow === rowIdx && kyokumen.lastSashite?.toCol === colIdx;
+                                const lastSashiteClass = isLastMoveTo ? MASU_LAST_MOVE_TO_STYLE : isLastMoveFrom ? MASU_LAST_MOVE_FROM_STYLE : '';
 
-                            return (
-                                <div
-                                    key={`${rowIdx}-${colIdx}`}
-                                    className={`${MASU_STYLE} ${selectedClass} ${lastSashiteClass}`}
-                                    onClick={() => handleMasuClick(rowIdx, colIdx)}
-                                >
-                                    {renderKoma(masu)}
-                                </div>
-                            );
-                        })}
-                    </div>
-                ))}
+                                return (
+                                    <div
+                                        key={`${rowIdx}-${colIdx}`}
+                                        className={`${MASU_STYLE} ${selectedClass} ${lastSashiteClass}`}
+                                        onClick={() => handleMasuClick(rowIdx, colIdx)}
+                                    >
+                                        {renderKoma(masu)}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ))}
+                </div>
+
+                <Komadai
+                    owner="Sente"
+                    komadai={kyokumen.komadaiSente}
+                    selectedKind={kyokumen.teban === 'Sente' ? selectedKomadai : null}
+                    onKomaClick={handleKomadaiClick}
+                />
             </div>
 
-            <div className={LIST_STYLE}>
-                <div className="p-2 border-b border-[#ccc] bg-[#eee] font-bold text-sm flex items-center justify-between sticky top-0">
-                    棋譜
-                </div>
-                {sashiteList.map((s, i) => (
-                    <div
-                        key={i}
-                        className={`${LIST_ITEM_STYLE} ${i === tesuu ? LIST_ITEM_SELECTED_STYLE : ''} ${path[i] !== 0 ? 'bg-red-500' : ''}`}
-                        onClick={() => handleListClick(i)}
-                        onContextMenu={(e) => handleKifuContextMenu(e, i)}
-                    >
-                        <span className={LIST_INDEX_STYLE}>{i}</span>
-                        <span>{s}</span>
-                        {i in branchMap && i !== sashiteList.length - 1 && (
-                            <span className="ml-auto text-[10px] bg-sky-500 text-white px-1 rounded-sm">次分岐</span>
-                        )}
+            <div className="flex flex-col gap-4">
+                <div className={LIST_STYLE}>
+                    <div className="p-2 border-b border-[#ccc] bg-[#eee] font-bold text-sm flex items-center justify-between sticky top-0">
+                        棋譜
                     </div>
-                ))}
-            </div>
+                    {sashiteList.map((s, i) => (
+                        <div
+                            key={i}
+                            className={`${LIST_ITEM_STYLE} ${i === tesuu ? LIST_ITEM_SELECTED_STYLE : ''}`}
+                            onClick={() => handleListClick(i)}
+                            onContextMenu={(e) => handleKifuContextMenu(e, i)}
+                        >
+                            <span className={LIST_INDEX_STYLE}>{i}</span>
+                            <span>{s}</span>
+                            {i in branchMap && i !== sashiteList.length - 1 && (
+                                <span className="ml-auto text-[10px] bg-sky-500 text-white px-1 rounded-sm">次分岐</span>
+                            )}
+                        </div>
+                    ))}
+                </div>
 
-            <div className={`${LIST_STYLE} border-l-0 ${currentBranches.length === 0 ? 'opacity-30 pointer-events-none' : ''}`}>
-                <div className="p-2 border-b border-[#ccc] bg-sky-900 text-white font-bold text-sm flex items-center justify-between sticky top-0">
-                    変化・分岐
+                <div className={`${LIST_STYLE} border-l-0 ${currentBranches.length === 0 ? 'opacity-30 pointer-events-none' : ''}`}>
+                    <div className="p-2 border-b border-[#ccc] bg-sky-900 text-white font-bold text-sm flex items-center justify-between sticky top-0">
+                        変化・分岐
+                    </div>
+                    {currentBranches.map((s, i) => (
+                        <div
+                            key={i}
+                            className={`${LIST_ITEM_STYLE} ${path[tesuu] === i || (!path[tesuu] && i === 0) ? 'bg-sky-100 font-semibold' : ''}`}
+                            onClick={() => handleBranchClick(i)}
+                        >
+                            <span className={LIST_INDEX_STYLE}>{i + 1}</span>
+                            <span>{s}</span>
+                        </div>
+                    ))}
+                    {currentBranches.length === 0 && (
+                        <div className="p-4 text-stone-400 text-xs text-center italic">
+                            選択中の手に分岐はありません
+                        </div>
+                    )}
                 </div>
-                {currentBranches.map((s, i) => (
-                    <div
-                        key={i}
-                        className={`${LIST_ITEM_STYLE} ${path[tesuu] === i || (!path[tesuu] && i === 0) ? 'bg-sky-100 font-semibold' : ''}`}
-                        onClick={() => handleBranchClick(i)}
-                    >
-                        <span className={LIST_INDEX_STYLE}>{i + 1}</span>
-                        <span>{s}</span>
-                    </div>
-                ))}
-                {currentBranches.length === 0 && (
-                    <div className="p-4 text-stone-400 text-xs text-center italic">
-                        選択中の手に分岐はありません
-                    </div>
-                )}
             </div>
 
             {contextMenu && (

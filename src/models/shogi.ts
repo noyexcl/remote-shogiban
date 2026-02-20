@@ -4,10 +4,10 @@ export type Masu = Koma | null;
 
 export type KomaDai = Record<Exclude<KomaKind, "FU+" | "KY+" | "KE+" | "GI+" | "KA+" | "HI+">, number>;
 
-type KomaKind = "FU" | "KY" | "KE" | "GI" | "KI" | "KA" | "HI" | "OU"
+export type KomaKind = "FU" | "KY" | "KE" | "GI" | "KI" | "KA" | "HI" | "OU"
     | "FU+" | "KY+" | "KE+" | "GI+" | "KA+" | "HI+";
 
-type Player = "Sente" | "Gote";
+export type Player = "Sente" | "Gote";
 
 export type Koma = {
     kind: KomaKind;
@@ -419,46 +419,109 @@ export class Kyokumen {
     }
 
     move(sashite: Sashite) {
-        /*
-        if (!this.isLegal(sashite)) {
-            throw new Error("Invalid move");
-        }
-        */
-
-        if (sashite.fromRow == -255) {
+        if (sashite.fromRow === -255) {
             return;
         }
 
-        const koma = this.ban[sashite.fromRow][sashite.fromCol];
-        if (!koma) {
-            throw new Error("No piece to move");
-        }
-
-        const target = this.ban[sashite.toRow][sashite.toCol];
-        if (target) {
-            // Capture
-            const capturedKind = unpromote(target.kind); // Promoted pieces revert to original kind when captured
-            const owner = koma.owner;
+        if (sashite.fromRow < 0) {
+            // Drop Move
+            const owner = this.teban;
             const komadai = owner === "Sente" ? this.komadaiSente : this.komadaiGote;
+            const kind = sashite.komaKind;
 
-            if (capturedKind in komadai) {
-                komadai[capturedKind]++;
+            if (kind in komadai && komadai[kind as keyof KomaDai] > 0) {
+                komadai[kind as keyof KomaDai]--;
+            } else {
+                throw new Error(`Insufficient pieces in Komadai: ${kind}`);
             }
-        }
 
-        this.ban[sashite.toRow][sashite.toCol] = {
-            ...koma,
-        };
-        this.ban[sashite.fromRow][sashite.fromCol] = null;
+            this.ban[sashite.toRow][sashite.toCol] = {
+                kind,
+                owner,
+                promoted: false
+            };
+        } else {
+            // Normal Move
+            const koma = this.ban[sashite.fromRow][sashite.fromCol];
+            if (!koma) {
+                throw new Error("No piece to move");
+            }
+
+            const target = this.ban[sashite.toRow][sashite.toCol];
+            if (target) {
+                // Capture
+                const capturedKind = unpromote(target.kind);
+                const owner = koma.owner;
+                const komadai = owner === "Sente" ? this.komadaiSente : this.komadaiGote;
+
+                if (capturedKind in komadai) {
+                    komadai[capturedKind]++;
+                }
+            }
+
+            this.ban[sashite.toRow][sashite.toCol] = {
+                ...koma,
+                kind: sashite.komaKind, // Use the kind from sashite in case of promotion
+                promoted: sashite.promote
+            };
+            this.ban[sashite.fromRow][sashite.fromCol] = null;
+        }
 
         // Toggle turn
         this.teban = this.teban === "Sente" ? "Gote" : "Sente";
-
         this.lastSashite = sashite;
     }
 
     isLegal(fromRow: number, fromCol: number, toRow: number, toCol: number): boolean {
-        if (fromRow == -255) {
+        if (fromRow === -255) {
+            return true;
+        }
+
+        if (fromRow < 0) {
+            // Drop Move Validation
+            if (this.ban[toRow][toCol]) return false; // Square must be empty
+
+            // If it's trying to drop a koma from Gote's komadai(-11 ~ -17)
+            // but the teban is Sente.
+            if ((fromRow < -10) && this.teban === "Sente") return false;
+
+            // Same as above but for Sente's komadai(-1 ~ -7)
+            if ((fromRow > -10) && this.teban === "Gote") return false;
+
+            const komadai = this.teban === "Sente" ? this.komadaiSente : this.komadaiGote;
+            let kind: KomaKind;
+            switch (fromRow) {
+                case -1 || -11: kind = "FU"; break;
+                case -2 || -12: kind = "KY"; break;
+                case -3 || -13: kind = "KE"; break;
+                case -4 || -14: kind = "GI"; break;
+                case -5 || -15: kind = "KI"; break;
+                case -6 || -16: kind = "KA"; break;
+                case -7 || -17: kind = "HI"; break;
+                default: return false;
+            }
+
+            if (komadai[kind as keyof KomaDai] <= 0) return false;
+
+            // Basic drop constraints (rank limits)
+            if (this.teban === "Sente") {
+                if (kind === "FU" && toRow === 0) return false;
+                if (kind === "KY" && toRow === 0) return false;
+                if (kind === "KE" && toRow <= 1) return false;
+            } else {
+                if (kind === "FU" && toRow === 8) return false;
+                if (kind === "KY" && toRow === 8) return false;
+                if (kind === "KE" && toRow >= 7) return false;
+            }
+
+            // Nifu check
+            if (kind === "FU") {
+                for (let r = 0; r < 9; r++) {
+                    const k = this.ban[r][toCol];
+                    if (k && k.kind === "FU" && k.owner === this.teban) return false;
+                }
+            }
+
             return true;
         }
 
@@ -473,23 +536,20 @@ export class Kyokumen {
         const colDiff = toCol - fromCol;
         const forward = koma.owner === "Sente" ? -1 : 1;
 
-        // Basic movement rules (simplified for now, covering main pieces)
-        // TODO: Add promotion rules and full movement validation for all pieces
+        // Basic movement rules
         switch (koma.kind) {
             case "FU":
                 return colDiff === 0 && rowDiff === forward;
             case "KY":
                 if (colDiff !== 0) return false;
                 if (forward === -1) {
-                    if (rowDiff >= 0) return false; // Must move forward (negative rowDiff for Sente)
-                    // Check for obstacles
+                    if (rowDiff >= 0) return false;
                     for (let r = fromRow - 1; r > toRow; r--) {
                         if (this.ban[r][fromCol]) return false;
                     }
                     return true;
                 } else {
-                    if (rowDiff <= 0) return false; // Must move forward (positive rowDiff for Gote)
-                    // Check for obstacles
+                    if (rowDiff <= 0) return false;
                     for (let r = fromRow + 1; r < toRow; r++) {
                         if (this.ban[r][fromCol]) return false;
                     }
@@ -498,30 +558,54 @@ export class Kyokumen {
             case "KE":
                 return Math.abs(colDiff) === 1 && rowDiff === forward * 2;
             case "GI":
-                // Forward, Forward-Left, Forward-Right, Backward-Left, Backward-Right
                 if (Math.abs(rowDiff) > 1 || Math.abs(colDiff) > 1) return false;
-                if (rowDiff === forward && Math.abs(colDiff) <= 1) return true; // Forward 3 directions
-                if (rowDiff === -forward && Math.abs(colDiff) === 1) return true; // Backward diagonals
+                if (rowDiff === forward && Math.abs(colDiff) <= 1) return true;
+                if (rowDiff === -forward && Math.abs(colDiff) === 1) return true;
                 return false;
             case "KI":
-                // Forward 3 dirs, Side 2 dirs, Backward 1 dir
+            case "FU+":
+            case "KY+":
+            case "KE+":
+            case "GI+":
                 if (Math.abs(rowDiff) > 1 || Math.abs(colDiff) > 1) return false;
-                if (rowDiff === forward && Math.abs(colDiff) <= 1) return true; // Forward 3
-                if (rowDiff === 0 && Math.abs(colDiff) === 1) return true; // Sides
-                if (rowDiff === -forward && colDiff === 0) return true; // Backward straight
+                if (rowDiff === forward && Math.abs(colDiff) <= 1) return true;
+                if (rowDiff === 0 && Math.abs(colDiff) === 1) return true;
+                if (rowDiff === -forward && colDiff === 0) return true;
                 return false;
             case "KA":
                 if (Math.abs(rowDiff) !== Math.abs(colDiff)) return false;
-                // Check path
-                const rStep = rowDiff > 0 ? 1 : -1;
-                const cStep = colDiff > 0 ? 1 : -1;
+                const rStepKA = rowDiff > 0 ? 1 : -1;
+                const cStepKA = colDiff > 0 ? 1 : -1;
                 for (let i = 1; i < Math.abs(rowDiff); i++) {
-                    if (this.ban[fromRow + i * rStep][fromCol + i * cStep]) return false;
+                    if (this.ban[fromRow + i * rStepKA][fromCol + i * cStepKA]) return false;
+                }
+                return true;
+            case "KA+":
+                if (Math.abs(rowDiff) <= 1 && Math.abs(colDiff) <= 1) return true;
+                if (Math.abs(rowDiff) !== Math.abs(colDiff)) return false;
+                const rStepUMA = rowDiff > 0 ? 1 : -1;
+                const cStepUMA = colDiff > 0 ? 1 : -1;
+                for (let i = 1; i < Math.abs(rowDiff); i++) {
+                    if (this.ban[fromRow + i * rStepUMA][fromCol + i * cStepUMA]) return false;
                 }
                 return true;
             case "HI":
                 if (rowDiff !== 0 && colDiff !== 0) return false;
-                // Check path
+                if (rowDiff !== 0) {
+                    const rStep = rowDiff > 0 ? 1 : -1;
+                    for (let i = 1; i < Math.abs(rowDiff); i++) {
+                        if (this.ban[fromRow + i * rStep][fromCol]) return false;
+                    }
+                } else {
+                    const cStep = colDiff > 0 ? 1 : -1;
+                    for (let i = 1; i < Math.abs(colDiff); i++) {
+                        if (this.ban[fromRow][fromCol + i * cStep]) return false;
+                    }
+                }
+                return true;
+            case "HI+":
+                if (Math.abs(rowDiff) <= 1 && Math.abs(colDiff) <= 1) return true;
+                if (rowDiff !== 0 && colDiff !== 0) return false;
                 if (rowDiff !== 0) {
                     const rStep = rowDiff > 0 ? 1 : -1;
                     for (let i = 1; i < Math.abs(rowDiff); i++) {
