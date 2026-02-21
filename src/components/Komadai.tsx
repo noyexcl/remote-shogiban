@@ -36,7 +36,7 @@ const Komadai = ({ owner, komadai, selectedKind, onKomaClick, reversed }: Komada
                         >
                             <div className={ICON_CONTAINER_STYLE}>
                                 <img
-                                    src={getKomaImageUrl(kind, reversed)}
+                                    src={getKomaImageUrl(kind, reversed, owner)}
                                     alt={kind}
                                     className="w-full h-full object-contain"
                                 />

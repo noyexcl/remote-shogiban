@@ -45,7 +45,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
     const [path, setPath] = useState<number[]>(Array(500).fill(0));
     const [kyokumen, setKyokumen] = useState<Kyokumen>(kifu.getKyokumen([]));
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, targetTesuu: number } | null>(null);
-    const [reversed, setReversed] = useState<boolean>(false);
+    const [reversed, setReversed] = useState<boolean>(true);
 
     const closeContextMenu = useCallback(() => {
         setContextMenu(null);
@@ -164,17 +164,17 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
         setSelectedKomadai(null);
     }
 
-    const [sashiteList, branchMap] = useMemo(() => kifu.getSashiteList(path), [kifu, path]);
+    const [sashiteList, branchMap] = useMemo(() => kifu.getSashiteList(path), [kifu, path, kyokumen]);
     const currentBranches = branchMap[tesuu] || [];
 
     const renderKoma = (koma: Koma | null) => {
         if (!koma) return null;
 
-        const r = reversed && koma.owner === 'Sente' || !reversed && koma.owner === 'Gote';
+        const r = (reversed && koma.owner === 'Sente') || (!reversed && koma.owner === 'Gote');
 
         return (
             <div className={PIECE_CONTAINER_STYLE} title={`${koma.owner} ${koma.kind}${koma.promoted ? '+' : ''}`}>
-                <img src={getKomaImageUrl(koma.kind, r)} alt={koma.kind} className="w-full h-full object-contain" />
+                <img src={getKomaImageUrl(koma.kind, r, koma.owner)} alt={koma.kind} className="w-full h-full object-contain" />
             </div>
         );
     };
@@ -185,45 +185,57 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                 <Komadai
                     owner="Gote"
                     komadai={kyokumen.komadaiGote}
-                    selectedKind={selectedKomadai}
+                    selectedKind={selectedKomadai?.[1] === "Gote" ? selectedKomadai : null}
                     onKomaClick={handleKomadaiClick}
-                    reversed
+                    reversed={!reversed}
                 />
 
                 <div className={BOARD_STYLE}>
-                    {kyokumen.ban.map((row, rowIdx) => (
-                        <div key={rowIdx} className="contents">
-                            {row.map((masu, colIdx) => {
-                                const isSelected = selected?.[0] === rowIdx && selected?.[1] === colIdx;
-                                const selectedClass = isSelected ? MASU_SELECTED_STYLE : '';
-                                const isLastMoveFrom = kyokumen.lastSashite?.fromRow === rowIdx && kyokumen.lastSashite?.fromCol === colIdx;
-                                const isLastMoveTo = kyokumen.lastSashite?.toRow === rowIdx && kyokumen.lastSashite?.toCol === colIdx;
-                                const lastSashiteClass = isLastMoveTo ? MASU_LAST_MOVE_TO_STYLE : isLastMoveFrom ? MASU_LAST_MOVE_FROM_STYLE : '';
+                    {Array.from({ length: 9 }).map((_, rIdx) => {
+                        const rowIdx = reversed ? 8 - rIdx : rIdx;
+                        const row = kyokumen.ban[rowIdx];
+                        return (
+                            <div key={rowIdx} className="contents">
+                                {Array.from({ length: 9 }).map((_, cIdx) => {
+                                    const colIdx = reversed ? 8 - cIdx : cIdx;
+                                    const masu = row[colIdx];
+                                    const isSelected = selected?.[0] === rowIdx && selected?.[1] === colIdx;
+                                    const selectedClass = isSelected ? MASU_SELECTED_STYLE : '';
+                                    const isLastMoveFrom = kyokumen.lastSashite?.fromRow === rowIdx && kyokumen.lastSashite?.fromCol === colIdx;
+                                    const isLastMoveTo = kyokumen.lastSashite?.toRow === rowIdx && kyokumen.lastSashite?.toCol === colIdx;
+                                    const lastSashiteClass = isLastMoveTo ? MASU_LAST_MOVE_TO_STYLE : isLastMoveFrom ? MASU_LAST_MOVE_FROM_STYLE : '';
 
-                                return (
-                                    <div
-                                        key={`${rowIdx}-${colIdx}`}
-                                        className={`${MASU_STYLE} ${selectedClass} ${lastSashiteClass}`}
-                                        onClick={() => handleMasuClick(rowIdx, colIdx)}
-                                    >
-                                        {renderKoma(masu)}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    ))}
+                                    return (
+                                        <div
+                                            key={`${rowIdx}-${colIdx}`}
+                                            className={`${MASU_STYLE} ${selectedClass} ${lastSashiteClass}`}
+                                            onClick={() => handleMasuClick(rowIdx, colIdx)}
+                                        >
+                                            {renderKoma(masu)}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })}
                 </div>
 
                 <Komadai
                     owner="Sente"
                     komadai={kyokumen.komadaiSente}
-                    selectedKind={kyokumen.teban === 'Sente' ? selectedKomadai : null}
+                    selectedKind={selectedKomadai?.[1] === "Sente" ? selectedKomadai : null}
                     onKomaClick={handleKomadaiClick}
-                    reversed={false}
+                    reversed={reversed}
                 />
             </div>
 
             <div className="flex flex-col gap-4">
+                <button
+                    onClick={() => setReversed(!reversed)}
+                    className="px-4 py-2 bg-stone-700 text-white rounded hover:bg-stone-600 transition-colors shadow-sm font-bold"
+                >
+                    盤面を反転
+                </button>
                 <div className={LIST_STYLE}>
                     <div className="p-2 border-b border-[#ccc] bg-[#eee] font-bold text-sm flex items-center justify-between sticky top-0">
                         棋譜

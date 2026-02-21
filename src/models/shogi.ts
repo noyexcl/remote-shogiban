@@ -669,7 +669,7 @@ function fmtSashite(sashite: Sashite): string {
         return "開始局面";
     }
 
-    const col = sashite.toCol + 1;
+    const col = 9 - sashite.toCol;
     let colStr;
 
     switch (col) {
@@ -702,7 +702,7 @@ function fmtSashite(sashite: Sashite): string {
             break;
     }
 
-    const row = 9 - sashite.toRow;
+    const row = sashite.toRow + 1;
     let rowStr;
 
     switch (row) {
