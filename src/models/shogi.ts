@@ -40,6 +40,11 @@ export type Sashite = {
     next: Sashite[];
 };
 
+/**
+ * 開始局面と指し手のリストを保持するクラス
+ * 
+ * n手目の局面を取得したり手を追加する際は、各指し手の分岐先を表す長さnの配列`path`使って指定する
+ */
 export class Kifu {
     startKyokumen: Kyokumen;
     root: Sashite;
@@ -117,6 +122,16 @@ export class Kifu {
         return [legal, false];
     }
 
+    /**
+     * `path`の分岐に従ってn手目の後に指し手を加え、追加した手のインデックス(`Sashite.next[index]`)を返す
+     *
+     * 例えばn手目以降に指し手が無かった場合は0を返すが、既に異なる手が一つあった場合は1を返す
+     * 
+     * 同じ手が存在している場合、何もせずにその手のインデックスを返す
+     *  
+     * @param path 各指し手での分岐先を表す長さnの配列
+     * @returns 追加もしくは既に存在している手のインデックス
+     */
     addSashite(path: number[], fromRow: number, fromCol: number, toRow: number, toCol: number, promote: boolean): number {
         const targetSashite = this.getSashite(path);
 

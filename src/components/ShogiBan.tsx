@@ -183,11 +183,11 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
         <div className="flex flex-wrap items-start justify-center gap-4 p-4">
             <div className="flex flex-row items-stretch gap-2">
                 <Komadai
-                    owner="Gote"
-                    komadai={kyokumen.komadaiGote}
-                    selectedKind={selectedKomadai?.[1] === "Gote" ? selectedKomadai : null}
+                    owner={reversed ? "Sente" : "Gote"}
+                    komadai={reversed ? kyokumen.komadaiSente : kyokumen.komadaiGote}
+                    selectedKind={selectedKomadai?.[1] === (reversed ? "Sente" : "Gote") ? selectedKomadai : null}
                     onKomaClick={handleKomadaiClick}
-                    reversed={!reversed}
+                    reversed
                 />
 
                 <div className={BOARD_STYLE}>
@@ -221,11 +221,11 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                 </div>
 
                 <Komadai
-                    owner="Sente"
-                    komadai={kyokumen.komadaiSente}
-                    selectedKind={selectedKomadai?.[1] === "Sente" ? selectedKomadai : null}
+                    owner={reversed ? "Gote" : "Sente"}
+                    komadai={reversed ? kyokumen.komadaiGote : kyokumen.komadaiSente}
+                    selectedKind={selectedKomadai?.[1] === (reversed ? "Gote" : "Sente") ? selectedKomadai : null}
                     onKomaClick={handleKomadaiClick}
-                    reversed={reversed}
+                    reversed={false}
                 />
             </div>
 
