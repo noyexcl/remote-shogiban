@@ -97,16 +97,24 @@ export class Kifu {
         const kyokumen = this.getKyokumen(path);
 
         const legal = kyokumen.isLegal(fromRow, fromCol, toRow, toCol);
+        if (!legal) return [false, false];
 
-        if (kyokumen.teban == "Sente" && fromRow >= 0 && fromRow <= 2) {
-            return [legal, true];
+        if (fromRow >= 10 || fromRow === -1) {
+            return [true, false];
         }
 
-        if (kyokumen.teban == "Gote" && fromRow >= 7 && fromRow <= 9) {
-            return [legal, true];
-        }
+        const koma = kyokumen.ban[fromRow][fromCol]!;
+        if (koma.promoted) return [true, false];
 
-        return [legal, false];
+        const promotableKinds: KomaKind[] = ["FU", "KY", "KE", "GI", "KA", "HI"];
+        if (!promotableKinds.includes(koma.kind)) return [true, false];
+
+        const isSente = koma.owner === "Sente";
+        const inPromotionZone = isSente
+            ? (fromRow <= 2 || toRow <= 2)
+            : (fromRow >= 6 || toRow >= 6);
+
+        return [true, inPromotionZone];
     }
 
     /**
@@ -469,6 +477,7 @@ export class Kyokumen {
 
             this.ban[toRow][toCol] = {
                 ...koma,
+                kind: promote ? promoteKoma(koma.kind) : koma.kind,
                 promoted: promote
             };
             this.ban[fromRow][fromCol] = null;
@@ -817,7 +826,37 @@ function fmtSashite(sashite: Sashite): string {
             break;
     }
 
-    return `${colStr}${rowStr}${komaKindStr}`;
+    return `${colStr}${rowStr}${komaKindStr}${sashite.promote ? "成" : ""}`;
+}
+
+/**
+ * 指し手が強制的に成らなければならないかどうかを判定する
+ */
+export function isMandatoryPromotion(koma: Koma, toRow: number): boolean {
+    if (koma.owner === "Sente") {
+        if ((koma.kind === "FU" || koma.kind === "KY") && toRow === 0) return true;
+        if (koma.kind === "KE" && toRow <= 1) return true;
+    } else {
+        if ((koma.kind === "FU" || koma.kind === "KY") && toRow === 8) return true;
+        if (koma.kind === "KE" && toRow >= 7) return true;
+    }
+    return false;
+}
+
+/**
+ * 駒を成らせる。成れない駒の場合はエラー。
+ */
+function promoteKoma(koma: KomaKind): KomaKind {
+    switch (koma) {
+        case "FU": return "FU+";
+        case "KY": return "KY+";
+        case "KE": return "KE+";
+        case "GI": return "GI+";
+        case "KA": return "KA+";
+        case "HI": return "HI+";
+        default:
+            throw new Error(`koma ${koma} cannot be promoted`);
+    }
 }
 
 /**

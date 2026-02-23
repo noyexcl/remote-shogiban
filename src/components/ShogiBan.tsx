@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { getFromRow, Kyokumen } from '../models/shogi';
+import { getFromRow, isMandatoryPromotion, Kyokumen } from '../models/shogi';
 import type { Kifu, Koma, KomaKind, Player } from "../models/shogi"
 import Komadai from './Komadai';
 import { getKomaImageUrl } from '../util';
@@ -36,6 +36,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
     const [kyokumen, setKyokumen] = useState<Kyokumen>(kifu.getKyokumen([]));
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, targetTesuu: number } | null>(null);
     const [reversed, setReversed] = useState<boolean>(true);
+    const [pendingPromotion, setPendingPromotion] = useState<{ fromRow: number, fromCol: number, toRow: number, toCol: number } | null>(null);
 
     const closeContextMenu = useCallback(() => {
         setContextMenu(null);
@@ -69,24 +70,38 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
             // 2. Try to move from board
             const [selRow, selCol] = selected;
             const [legal, canPromote] = kifu.isLegal(path.slice(0, tesuu), selRow, selCol, row, col);
-            // TODO: show promote dialog if canPromote is true
 
             if (legal) {
-                const nextBranchIdx = kifu.addSashite(path.slice(0, tesuu), selRow, selCol, row, col, false);
-
-                if (nextBranchIdx !== path[tesuu]) {
-                    switchPath(path, tesuu, nextBranchIdx);
-                    setPath([...path]);
+                if (canPromote) {
+                    const koma = kyokumen.ban[selRow][selCol]!;
+                    if (isMandatoryPromotion(koma, row)) {
+                        executeMove(selRow, selCol, row, col, true);
+                    } else {
+                        setPendingPromotion({ fromRow: selRow, fromCol: selCol, toRow: row, toCol: col });
+                    }
+                } else {
+                    executeMove(selRow, selCol, row, col, false);
                 }
-
-                setSelected(null);
-                setTesuu(tesuu + 1);
-                setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
             } else {
                 // Invalid move
                 setSelected(null);
             }
         }
+    };
+
+    const executeMove = (fRow: number, fCol: number, tRow: number, tCol: number, promote: boolean) => {
+        const nextBranchIdx = kifu.addSashite(path.slice(0, tesuu), fRow, fCol, tRow, tCol, promote);
+
+        if (nextBranchIdx !== path[tesuu]) {
+            switchPath(path, tesuu, nextBranchIdx);
+            setPath([...path]);
+        }
+
+        setSelected(null);
+        setSelectedKomadai(null);
+        setTesuu(tesuu + 1);
+        setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
+        setPendingPromotion(null);
     };
 
     const handleKomadaiClick = (kind: KomaKind, owner: Player) => {
@@ -257,6 +272,28 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                         }}
                     >
                         <span className="text-red-600">指し手削除</span>
+                    </div>
+                </div>
+            )}
+
+            {pendingPromotion && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
+                    <div className="bg-white p-6 rounded-lg shadow-xl flex flex-col items-center gap-4">
+                        <div className="text-lg font-bold">成りますか？</div>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={() => executeMove(pendingPromotion.fromRow, pendingPromotion.fromCol, pendingPromotion.toRow, pendingPromotion.toCol, true)}
+                                className="px-6 py-2 bg-sky-600 text-white rounded hover:bg-sky-700 font-bold transition-colors"
+                            >
+                                成る
+                            </button>
+                            <button
+                                onClick={() => executeMove(pendingPromotion.fromRow, pendingPromotion.fromCol, pendingPromotion.toRow, pendingPromotion.toCol, false)}
+                                className="px-6 py-2 bg-stone-200 text-stone-700 rounded hover:bg-stone-300 font-bold transition-colors"
+                            >
+                                成らない
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
