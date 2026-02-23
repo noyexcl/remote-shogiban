@@ -15,19 +15,6 @@ export type Koma = {
     promoted: boolean;
 };
 
-/**
- * fromRow == -255 represents 0手目, which actually does nothing (even teban will not be changed). \
- * 
- * fromRow == -1~-7 represents a move that drops a koma from komadai.
- * -1: FU
- * -2: KY
- * -3: KE
- * -4: GI
- * -5: KI
- * -6: KA
- * -7: HI
- * 
- */
 export type Sashite = {
     fromRow: number;
     fromCol: number;
@@ -53,10 +40,10 @@ export class Kifu {
         this.startKyokumen = new Kyokumen();
         this.startKyokumen.init();
         this.root = {
-            fromRow: -255,
-            fromCol: -255,
-            toRow: -255,
-            toCol: -255,
+            fromRow: -1,
+            fromCol: -1,
+            toRow: -1,
+            toCol: -1,
             komaKind: "FU",
             promote: false,
             comment: "",
@@ -86,7 +73,7 @@ export class Kifu {
                     ${sashite.fromCol}) to(${sashite.toRow}, ${sashite.toCol}) ${sashite.komaKind} `);
             }
 
-            kyokumen.move(sashite);
+            kyokumen.move(sashite.fromRow, sashite.fromCol, sashite.toRow, sashite.toCol, sashite.promote);
         }
 
         return kyokumen;
@@ -151,24 +138,11 @@ export class Kifu {
 
         let komaKind: KomaKind;
 
-        if (fromRow >= 0) {
+
+        if (fromRow < 10) {
             komaKind = kyokumen.ban[fromRow][fromCol]!.kind;
-        } else if (fromRow === -1) {
-            komaKind = "FU";
-        } else if (fromRow === -2) {
-            komaKind = "KY";
-        } else if (fromRow === -3) {
-            komaKind = "KE";
-        } else if (fromRow === -4) {
-            komaKind = "GI";
-        } else if (fromRow === -5) {
-            komaKind = "KI";
-        } else if (fromRow === -6) {
-            komaKind = "KA";
-        } else if (fromRow === -7) {
-            komaKind = "HI";
         } else {
-            throw new Error(`Invalid fromRow: ${fromRow}`);
+            komaKind = getDroppedKomaKind(fromRow);
         }
 
         targetSashite.next.push({
@@ -248,7 +222,10 @@ export class Kyokumen {
     komadaiSente: KomaDai;
     komadaiGote: KomaDai;
     teban: Player;
-    lastSashite: Sashite | null;
+    lastFromRow: number | null;
+    lastFromCol: number | null;
+    lastToRow: number | null;
+    lastToCol: number | null;
 
     constructor() {
         this.ban = [];
@@ -269,7 +246,10 @@ export class Kyokumen {
 
         this.teban = "Sente";
 
-        this.lastSashite = null;
+        this.lastFromRow = null;
+        this.lastFromCol = null;
+        this.lastToRow = null;
+        this.lastToCol = null;
     }
 
     clone(): Kyokumen {
@@ -278,7 +258,10 @@ export class Kyokumen {
         copy.komadaiSente = { ...this.komadaiSente };
         copy.komadaiGote = { ...this.komadaiGote };
         copy.teban = this.teban;
-        copy.lastSashite = this.lastSashite;
+        copy.lastFromRow = this.lastFromRow;
+        copy.lastFromCol = this.lastFromCol;
+        copy.lastToRow = this.lastToRow;
+        copy.lastToCol = this.lastToCol;
         return copy;
     }
 
@@ -433,86 +416,122 @@ export class Kyokumen {
         }
     }
 
-    move(sashite: Sashite) {
-        if (sashite.fromRow === -255) {
+    /** 
+     * 現局面から指し手を指した状態へ遷移する
+     * 
+     * この関数は指し手が合法であることを前提としている
+     * 
+     * 駒台の駒を打つ手は `fromRow` を以下のように設定することで表現する
+     * 
+     * 先手の駒台 / 後手の駒台
+     * - 歩: 10 / 20
+     * - 桂: 11 / 21
+     * - 香: 12 / 22
+     * - 銀: 13 / 23
+     * - 金: 14 / 24
+     * - 角: 15 / 25
+     * - 飛: 16 / 26
+     * 
+     * 0手目(何もしない手)を表す時は `fromRow` に -1 を設定する \
+     * この手を渡しても何も起こらず、手番すら変わらない
+    */
+    move(fromRow: number, fromCol: number, toRow: number, toCol: number, promote: boolean) {
+        if (fromRow === -1) {
             return;
         }
 
-        if (sashite.fromRow < 0) {
+        if (fromRow >= 10) {
             // Drop Move
-            const owner = this.teban;
-            const komadai = owner === "Sente" ? this.komadaiSente : this.komadaiGote;
-            const kind = sashite.komaKind;
+            const komadai = fromRow >= 20 ? this.komadaiGote : this.komadaiSente;
+            const kind = getDroppedKomaKind(fromRow);
 
-            if (kind in komadai && komadai[kind as keyof KomaDai] > 0) {
-                komadai[kind as keyof KomaDai]--;
-            } else {
-                throw new Error(`Insufficient pieces in Komadai: ${kind}`);
-            }
+            komadai[kind as keyof KomaDai]--;
 
-            this.ban[sashite.toRow][sashite.toCol] = {
+            this.ban[toRow][toCol] = {
                 kind,
-                owner,
+                owner: this.teban,
                 promoted: false
             };
         } else {
             // Normal Move
-            const koma = this.ban[sashite.fromRow][sashite.fromCol];
+            const koma = this.ban[fromRow][fromCol];
             if (!koma) {
                 throw new Error("No piece to move");
             }
 
-            const target = this.ban[sashite.toRow][sashite.toCol];
+            const target = this.ban[toRow][toCol];
             if (target) {
                 // Capture
                 const capturedKind = unpromote(target.kind);
-                const owner = koma.owner;
-                const komadai = owner === "Sente" ? this.komadaiSente : this.komadaiGote;
-
-                if (capturedKind in komadai) {
-                    komadai[capturedKind]++;
-                }
+                const komadai = this.teban === "Sente" ? this.komadaiSente : this.komadaiGote;
+                komadai[capturedKind]++;
             }
 
-            this.ban[sashite.toRow][sashite.toCol] = {
+            this.ban[toRow][toCol] = {
                 ...koma,
-                kind: sashite.komaKind, // Use the kind from sashite in case of promotion
-                promoted: sashite.promote
+                promoted: promote
             };
-            this.ban[sashite.fromRow][sashite.fromCol] = null;
+            this.ban[fromRow][fromCol] = null;
         }
 
         // Toggle turn
         this.teban = this.teban === "Sente" ? "Gote" : "Sente";
-        this.lastSashite = sashite;
+
+        this.lastFromRow = fromRow;
+        this.lastFromCol = fromCol;
+        this.lastToRow = toRow;
+        this.lastToCol = toCol;
     }
 
+    /** 
+     * 現局面から指し手が合法かどうかを判定する
+     * 
+     * 駒台の駒を打つ場合は `fromRow` を以下のように設定することで表現する
+     * 
+     * 先手の駒台 / 後手の駒台
+     * - 歩: 10 / 20
+     * - 桂: 11 / 21
+     * - 香: 12 / 22
+     * - 銀: 13 / 23
+     * - 金: 14 / 24
+     * - 角: 15 / 25
+     * - 飛: 16 / 26
+     * 
+     * 0手目(何もしない手)を表す時は `fromRow` に -1 を設定する \
+     * -1は常に合法となる
+    */
     isLegal(fromRow: number, fromCol: number, toRow: number, toCol: number): boolean {
-        if (fromRow === -255) {
+        if (fromRow === -1) {
             return true;
         }
 
-        if (fromRow < 0) {
+        if (fromRow >= 10) {
             // Drop Move Validation
             if (this.ban[toRow][toCol]) return false; // Square must be empty
 
-            // If it's trying to drop a koma from Gote's komadai(-11 ~ -17)
-            // but the teban is Sente.
-            if ((fromRow < -10) && this.teban === "Sente") return false;
+            // If Sente is trying to drop a koma from Gote's komadai
+            if ((fromRow >= 20) && this.teban === "Sente") return false;
 
-            // Same as above but for Sente's komadai(-1 ~ -7)
-            if ((fromRow > -10) && this.teban === "Gote") return false;
+            // If Gote is trying to drop a koma from Sente's komadai
+            if ((fromRow >= 10 && fromRow <= 16) && this.teban === "Gote") return false;
 
             const komadai = this.teban === "Sente" ? this.komadaiSente : this.komadaiGote;
             let kind: KomaKind;
             switch (fromRow) {
-                case -1 || -11: kind = "FU"; break;
-                case -2 || -12: kind = "KY"; break;
-                case -3 || -13: kind = "KE"; break;
-                case -4 || -14: kind = "GI"; break;
-                case -5 || -15: kind = "KI"; break;
-                case -6 || -16: kind = "KA"; break;
-                case -7 || -17: kind = "HI"; break;
+                case 10:
+                case 20: kind = "FU"; break;
+                case 11:
+                case 21: kind = "KY"; break;
+                case 12:
+                case 22: kind = "KE"; break;
+                case 13:
+                case 23: kind = "GI"; break;
+                case 14:
+                case 24: kind = "KI"; break;
+                case 15:
+                case 25: kind = "KA"; break;
+                case 16:
+                case 26: kind = "HI"; break;
                 default: return false;
             }
 
@@ -680,7 +699,7 @@ function unpromote(koma: KomaKind): Exclude<KomaKind, "FU+" | "KY+" | "KE+" | "G
 }
 
 function fmtSashite(sashite: Sashite): string {
-    if (sashite.fromRow === -255) {
+    if (sashite.fromRow === -1) {
         return "開始局面";
     }
 
@@ -799,4 +818,83 @@ function fmtSashite(sashite: Sashite): string {
     }
 
     return `${colStr}${rowStr}${komaKindStr}`;
+}
+
+/**
+ * 駒台の駒を打つ時のfromRowから駒の種類を返す
+ */
+function getDroppedKomaKind(fromRow: number): KomaKind {
+    switch (fromRow) {
+        case 10:
+        case 20:
+            return "FU";
+        case 11:
+        case 21:
+            return "KY";
+        case 12:
+        case 22:
+            return "KE";
+        case 13:
+        case 23:
+            return "GI";
+        case 14:
+        case 24:
+            return "KI";
+        case 15:
+        case 25:
+            return "KA";
+        case 16:
+        case 26:
+            return "HI";
+        default:
+            throw new Error(`fromRow ${fromRow} does not represent a dropped koma`);
+    }
+}
+
+/**
+ * 盤上の指し手は通常(fromRow, fromCol, toRow, toCol)で表せるが、駒台の駒を打つ手はfromRowに10\~16(先手),
+ * 20\~26(後手)の値を設定して表現する必要がある
+ * 
+ * この関数は駒の種類と所持者から適切なfromRowを返す
+ */
+export function getFromRow(kind: KomaKind, owner: Player) {
+    if (owner === "Sente") {
+        switch (kind) {
+            case "FU":
+                return 10;
+            case "KY":
+                return 11;
+            case "KE":
+                return 12;
+            case "GI":
+                return 13;
+            case "KI":
+                return 14;
+            case "HI":
+                return 15;
+            case "KA":
+                return 16;
+            default:
+                throw new Error("Invalid koma kind");
+        }
+    } else {
+        switch (kind) {
+            case "FU":
+                return 20;
+            case "KY":
+                return 21;
+            case "KE":
+                return 22;
+            case "GI":
+                return 23;
+            case "KI":
+                return 24;
+            case "HI":
+                return 25;
+            case "KA":
+                return 26;
+            default:
+                throw new Error("Invalid koma kind");
+        }
+    }
 }

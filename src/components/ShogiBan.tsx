@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Kyokumen } from '../models/shogi';
+import { getFromRow, Kyokumen } from '../models/shogi';
 import type { Kifu, Koma, KomaKind, Player } from "../models/shogi"
 import Komadai from './Komadai';
 import { getKomaImageUrl } from '../util';
@@ -27,16 +27,6 @@ const CONTEXT_MENU_STYLE = "fixed bg-white border border-[#ccc] shadow-lg rounde
 const CONTEXT_MENU_ITEM_STYLE = "px-4 py-1.5 cursor-pointer hover:bg-sky-50 transition-colors flex items-center gap-2";
 
 const PIECE_CONTAINER_STYLE = "w-[55px] h-[55px] absolute cursor-grab select-none active:cursor-grabbing group max-sm:w-[38px] max-sm:h-[38px]";
-
-const KOMA_DROPRANGE_MAP: Record<string, number> = {
-    "FU": -1,
-    "KY": -2,
-    "KE": -3,
-    "GI": -4,
-    "KI": -5,
-    "KA": -6,
-    "HI": -7
-};
 
 const ShogiBan = ({ kifu }: ShogiBanProps) => {
     const [selected, setSelected] = useState<[number, number] | null>(null);
@@ -78,58 +68,33 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
         } else if (selected) {
             // 2. Try to move from board
             const [selRow, selCol] = selected;
-            try {
-                const [legal, canPromote] = kifu.isLegal(path.slice(0, tesuu), selRow, selCol, row, col);
-                // TODO: show promote dialog if canPromote is true
+            const [legal, canPromote] = kifu.isLegal(path.slice(0, tesuu), selRow, selCol, row, col);
+            // TODO: show promote dialog if canPromote is true
 
-                if (legal) {
-                    const nextBranchIdx = kifu.addSashite(path.slice(0, tesuu), selRow, selCol, row, col, false);
+            if (legal) {
+                const nextBranchIdx = kifu.addSashite(path.slice(0, tesuu), selRow, selCol, row, col, false);
 
-                    if (nextBranchIdx !== path[tesuu]) {
-                        switchPath(path, tesuu, nextBranchIdx);
-                        setPath([...path]);
-                    }
-
-                    setSelected(null);
-                    setTesuu(tesuu + 1);
-                    setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
-                } else {
-                    // Invalid move
-                    setSelected(null);
+                if (nextBranchIdx !== path[tesuu]) {
+                    switchPath(path, tesuu, nextBranchIdx);
+                    setPath([...path]);
                 }
-            } catch (e) {
-                console.error(e);
+
                 setSelected(null);
-            }
-        } else if (selectedKomadai) {
-            // 3. Try to drop from komadai
-            const fromRow = KOMA_DROPRANGE_MAP[selectedKomadai[0]];
-            if (fromRow !== undefined) {
-                try {
-                    const [legal] = kifu.isLegal(path.slice(0, tesuu), fromRow, -1, row, col);
-                    if (legal) {
-                        const nextBranchIdx = kifu.addSashite(path.slice(0, tesuu), fromRow, -1, row, col, false);
-                        if (nextBranchIdx !== path[tesuu]) {
-                            switchPath(path, tesuu, nextBranchIdx);
-                            setPath([...path]);
-                        }
-                        setSelectedKomadai(null);
-                        setTesuu(tesuu + 1);
-                        setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
-                    } else {
-                        setSelectedKomadai(null);
-                    }
-                } catch (e) {
-                    console.error(e);
-                    setSelectedKomadai(null);
-                }
+                setTesuu(tesuu + 1);
+                setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
+            } else {
+                // Invalid move
+                setSelected(null);
             }
         }
     };
 
     const handleKomadaiClick = (kind: KomaKind, owner: Player) => {
+        if (kyokumen.teban !== owner) return;
+
+        const fromRow = getFromRow(kind, owner);
+        setSelected([fromRow, 0]);
         setSelectedKomadai([kind, owner]);
-        setSelected(null);
     };
 
     const handleListClick = (index: number) => {
@@ -201,8 +166,8 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                                     const masu = row[colIdx];
                                     const isSelected = selected?.[0] === rowIdx && selected?.[1] === colIdx;
                                     const selectedClass = isSelected ? MASU_SELECTED_STYLE : '';
-                                    const isLastMoveFrom = kyokumen.lastSashite?.fromRow === rowIdx && kyokumen.lastSashite?.fromCol === colIdx;
-                                    const isLastMoveTo = kyokumen.lastSashite?.toRow === rowIdx && kyokumen.lastSashite?.toCol === colIdx;
+                                    const isLastMoveFrom = kyokumen.lastFromRow === rowIdx && kyokumen.lastFromCol === colIdx;
+                                    const isLastMoveTo = kyokumen.lastToRow === rowIdx && kyokumen.lastToCol === colIdx;
                                     const lastSashiteClass = isLastMoveTo ? MASU_LAST_MOVE_TO_STYLE : isLastMoveFrom ? MASU_LAST_MOVE_FROM_STYLE : '';
 
                                     return (
@@ -308,6 +273,5 @@ function switchPath(path: number[], at: number, idx: number) {
 
     return path;
 }
-
 
 export default ShogiBan;
