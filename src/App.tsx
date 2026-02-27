@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Kifu, Kyokumen } from './models/shogi'
-import Shogiban from './components/ShogiBan'
+import { Kifu } from './models/shogi'
+import Shogiban from './components/Shogiban'
 
 
 const APP_CONTAINER_STYLE = "min-h-screen flex flex-col items-center py-12 \

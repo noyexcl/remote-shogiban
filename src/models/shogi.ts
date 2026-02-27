@@ -93,30 +93,6 @@ export class Kifu {
         return sashite;
     }
 
-    isLegal(path: number[], fromRow: number, fromCol: number, toRow: number, toCol: number): [boolean, boolean] {
-        const kyokumen = this.getKyokumen(path);
-
-        const legal = kyokumen.isLegal(fromRow, fromCol, toRow, toCol);
-        if (!legal) return [false, false];
-
-        if (fromRow >= 10 || fromRow === -1) {
-            return [true, false];
-        }
-
-        const koma = kyokumen.ban[fromRow][fromCol]!;
-        if (koma.promoted) return [true, false];
-
-        const promotableKinds: KomaKind[] = ["FU", "KY", "KE", "GI", "KA", "HI"];
-        if (!promotableKinds.includes(koma.kind)) return [true, false];
-
-        const isSente = koma.owner === "Sente";
-        const inPromotionZone = isSente
-            ? (fromRow <= 2 || toRow <= 2)
-            : (fromRow >= 6 || toRow >= 6);
-
-        return [true, inPromotionZone];
-    }
-
     /**
      * `path`の分岐に従ってn手目の後に指し手を加え、追加した手のインデックス(`Sashite.next[index]`)を返す
      *
@@ -667,6 +643,48 @@ export class Kyokumen {
                 return false;
         }
     }
+
+    /**
+     * 現局面において指し手が成るのが必須かどうか判断する
+     * 
+     * この関数は指し手が合法であることを前提とする
+     */
+    isMandatoryPromotion(fromRow: number, fromCol: number, toRow: number): boolean {
+        if (fromRow >= 10 || fromRow === -1) return false;
+
+        const koma = this.ban[fromRow][fromCol];
+        if (!koma) return false;
+
+        if (this.teban === "Sente") {
+            if ((koma.kind === "FU" || koma.kind === "KY") && toRow === 0) return true;
+            if (koma.kind === "KE" && toRow <= 1) return true;
+        } else {
+            if ((koma.kind === "FU" || koma.kind === "KY") && toRow === 8) return true;
+            if (koma.kind === "KE" && toRow >= 7) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 現局面において指し手が成れるかどうか判断する
+     * 
+     * この関数は指し手が合法であることを前提とする
+     */
+    canPromote(fromRow: number, fromCol: number, toRow: number): boolean {
+        if (fromRow >= 10 || fromRow === -1) return false;
+
+        const koma = this.ban[fromRow][fromCol];
+        if (!koma) return false;
+
+        const promotableKinds: KomaKind[] = ["FU", "KY", "KE", "GI", "KA", "HI"];
+        if (!promotableKinds.includes(koma.kind)) return false;
+
+        const isSenteban = this.teban === "Sente";
+        const inPromotionZone = isSenteban
+            ? (fromRow <= 2 || toRow <= 2)
+            : (fromRow >= 6 || toRow >= 6);
+        return inPromotionZone;
+    }
 }
 
 function promote(koma: KomaKind): KomaKind {
@@ -827,20 +845,6 @@ function fmtSashite(sashite: Sashite): string {
     }
 
     return `${colStr}${rowStr}${komaKindStr}${sashite.promote ? "成" : ""}`;
-}
-
-/**
- * 指し手が強制的に成らなければならないかどうかを判定する
- */
-export function isMandatoryPromotion(koma: Koma, toRow: number): boolean {
-    if (koma.owner === "Sente") {
-        if ((koma.kind === "FU" || koma.kind === "KY") && toRow === 0) return true;
-        if (koma.kind === "KE" && toRow <= 1) return true;
-    } else {
-        if ((koma.kind === "FU" || koma.kind === "KY") && toRow === 8) return true;
-        if (koma.kind === "KE" && toRow >= 7) return true;
-    }
-    return false;
 }
 
 /**

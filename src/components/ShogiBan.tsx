@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { getFromRow, isMandatoryPromotion, Kyokumen } from '../models/shogi';
+import { getFromRow, Kyokumen } from '../models/shogi';
 import type { Kifu, Koma, KomaKind, Player } from "../models/shogi"
 import { Komadai } from './Komadai';
 import { getKomaImageUrl } from '../util';
@@ -63,28 +63,26 @@ const Shogiban = ({ kifu }: ShogibanProps) => {
         const isOwnPiece = targetKoma?.owner === kyokumen.teban;
 
         if (isOwnPiece) {
-            // 1. Select own piece (or switch selection)
+            /* 自駒が存在するマスがクリックされた時 */
             setSelected([row, col]);
             setSelectedKomadai(null);
         } else if (selected) {
-            // 2. Try to move from board
+            /* 既に選択している駒が存在しており、次に自駒が存在するマスではないマスがクリックされた時 */
             const [selRow, selCol] = selected;
-            const [legal, canPromote] = kifu.isLegal(path.slice(0, tesuu), selRow, selCol, row, col);
 
-            if (legal) {
-                if (canPromote) {
-                    const koma = kyokumen.ban[selRow][selCol]!;
-                    if (isMandatoryPromotion(koma, row)) {
-                        executeMove(selRow, selCol, row, col, true);
-                    } else {
-                        setPendingPromotion({ fromRow: selRow, fromCol: selCol, toRow: row, toCol: col });
-                    }
-                } else {
-                    executeMove(selRow, selCol, row, col, false);
-                }
+            const legal = kyokumen.isLegal(selRow, selCol, row, col);
+            if (!legal) return;
+
+            const isMandatoryPromotion = kyokumen.isMandatoryPromotion(selRow, selCol, row);
+
+            const canPromote = kyokumen.canPromote(selRow, selCol, row);
+
+            if (isMandatoryPromotion) {
+                executeMove(selRow, selCol, row, col, true);
+            } else if (canPromote) {
+                setPendingPromotion({ fromRow: selRow, fromCol: selCol, toRow: row, toCol: col });
             } else {
-                // Invalid move
-                setSelected(null);
+                executeMove(selRow, selCol, row, col, false);
             }
         }
     };
