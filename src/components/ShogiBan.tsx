@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getFromRow, isMandatoryPromotion, Kyokumen } from '../models/shogi';
 import type { Kifu, Koma, KomaKind, Player } from "../models/shogi"
-import Komadai from './Komadai';
+import { Komadai } from './Komadai';
 import { getKomaImageUrl } from '../util';
 
-interface ShogiBanProps {
+interface ShogibanProps {
     kifu: Kifu;
 }
 
@@ -28,7 +28,7 @@ const CONTEXT_MENU_ITEM_STYLE = "px-4 py-1.5 cursor-pointer hover:bg-sky-50 tran
 
 const PIECE_CONTAINER_STYLE = "w-[55px] h-[55px] absolute cursor-grab select-none active:cursor-grabbing group max-sm:w-[38px] max-sm:h-[38px]";
 
-const ShogiBan = ({ kifu }: ShogiBanProps) => {
+const Shogiban = ({ kifu }: ShogibanProps) => {
     const [selected, setSelected] = useState<[number, number] | null>(null);
     const [selectedKomadai, setSelectedKomadai] = useState<[KomaKind, Player] | null>(null);
     const [tesuu, setTesuu] = useState<number>(0);
@@ -311,4 +311,4 @@ function switchPath(path: number[], at: number, idx: number) {
     return path;
 }
 
-export default ShogiBan;
+export default Shogiban;

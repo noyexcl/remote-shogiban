@@ -1,10 +1,10 @@
-import type { KomaDai, KomaKind } from '../models/shogi';
+import type { KomadaiData, KomaKind } from '../models/shogi';
 import { getKomaImageUrl } from '../util';
 import type { Player } from '../models/shogi';
 
 interface KomadaiProps {
     owner: Player;
-    komadai: KomaDai;
+    komadai: KomadaiData;
     selectedKind: [KomaKind, Player] | null;
     onKomaClick: (kind: KomaKind, owner: Player) => void;
     reversed: boolean;
@@ -16,9 +16,9 @@ const SELECTED_STYLE = "bg-yellow-400/50 ring-2 ring-red-500 hover:bg-yellow-400
 const ICON_CONTAINER_STYLE = "w-[45px] h-[45px] relative max-sm:w-[35px] max-sm:h-[35px]";
 const COUNT_STYLE = "text-sm font-bold text-[#333] font-serif";
 
-const ORDER: (keyof KomaDai)[] = ["HI", "KA", "KI", "GI", "KE", "KY", "FU"];
+const ORDER: (keyof KomadaiData)[] = ["HI", "KA", "KI", "GI", "KE", "KY", "FU"];
 
-const Komadai = ({ owner, komadai, selectedKind, onKomaClick, reversed }: KomadaiProps) => {
+export const Komadai = ({ owner, komadai, selectedKind, onKomaClick, reversed }: KomadaiProps) => {
     const displayOrder = reversed ? [...ORDER].reverse() : ORDER;
 
     return (

@@ -2,7 +2,7 @@ import { produce } from "immer";
 
 export type Masu = Koma | null;
 
-export type KomaDai = Record<Exclude<KomaKind, "FU+" | "KY+" | "KE+" | "GI+" | "KA+" | "HI+">, number>;
+export type KomadaiData = Record<Exclude<KomaKind, "FU+" | "KY+" | "KE+" | "GI+" | "KA+" | "HI+">, number>;
 
 export type KomaKind = "FU" | "KY" | "KE" | "GI" | "KI" | "KA" | "HI" | "OU"
     | "FU+" | "KY+" | "KE+" | "GI+" | "KA+" | "HI+";
@@ -227,8 +227,8 @@ export class Kifu {
 
 export class Kyokumen {
     ban: Masu[][];
-    komadaiSente: KomaDai;
-    komadaiGote: KomaDai;
+    komadaiSente: KomadaiData;
+    komadaiGote: KomadaiData;
     teban: Player;
     lastFromRow: number | null;
     lastFromCol: number | null;
@@ -238,7 +238,7 @@ export class Kyokumen {
     constructor() {
         this.ban = [];
 
-        const komadai: KomaDai = {
+        const komadai: KomadaiData = {
             FU: 0,
             KY: 0,
             KE: 0,
@@ -453,7 +453,7 @@ export class Kyokumen {
             const komadai = fromRow >= 20 ? this.komadaiGote : this.komadaiSente;
             const kind = getDroppedKomaKind(fromRow);
 
-            komadai[kind as keyof KomaDai]--;
+            komadai[kind as keyof KomadaiData]--;
 
             this.ban[toRow][toCol] = {
                 kind,
@@ -544,7 +544,7 @@ export class Kyokumen {
                 default: return false;
             }
 
-            if (komadai[kind as keyof KomaDai] <= 0) return false;
+            if (komadai[kind as keyof KomadaiData] <= 0) return false;
 
             // Basic drop constraints (rank limits)
             if (this.teban === "Sente") {
