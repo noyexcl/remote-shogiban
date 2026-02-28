@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
-export default defineConfig({
-  base: '/remote-shogi-ban/',
+export default defineConfig(({ mode }) => ({
+  base: mode === 'github' ? '/remote-shogi-ban/' : '/',
   plugins: [react(), tailwindcss()],
-})
+}))
