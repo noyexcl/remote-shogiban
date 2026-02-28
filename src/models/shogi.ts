@@ -58,7 +58,7 @@ export class Kifu {
      * If n == 0, return the start kyokumen. (0手目 is treated as a move that does nothing))
      */
     getKyokumen(path: number[]): Kyokumen {
-        const kyokumen = this.startKyokumen.clone();
+        let kyokumen = this.startKyokumen;
         let sashite = this.root;
 
         for (const idx of path) {
@@ -73,7 +73,7 @@ export class Kifu {
                     ${sashite.fromCol}) to(${sashite.toRow}, ${sashite.toCol}) ${sashite.komaKind} `);
             }
 
-            kyokumen.move(sashite.fromRow, sashite.fromCol, sashite.toRow, sashite.toCol, sashite.promote);
+            kyokumen = kyokumen.move(sashite.fromRow, sashite.fromCol, sashite.toRow, sashite.toCol, sashite.promote);
         }
 
         return kyokumen;
@@ -419,53 +419,57 @@ export class Kyokumen {
      * 0手目(何もしない手)を表す時は `fromRow` に -1 を設定する \
      * この手を渡しても何も起こらず、手番すら変わらない
     */
-    move(fromRow: number, fromCol: number, toRow: number, toCol: number, promote: boolean) {
+    move(fromRow: number, fromCol: number, toRow: number, toCol: number, promote: boolean): Kyokumen {
+        const nextKyokumen = this.clone();
+
         if (fromRow === -1) {
-            return;
+            return nextKyokumen;
         }
 
         if (fromRow >= 10) {
             // Drop Move
-            const komadai = fromRow >= 20 ? this.komadaiGote : this.komadaiSente;
+            const komadai = fromRow >= 20 ? nextKyokumen.komadaiGote : nextKyokumen.komadaiSente;
             const kind = getDroppedKomaKind(fromRow);
 
             komadai[kind as keyof KomadaiData]--;
 
-            this.ban[toRow][toCol] = {
+            nextKyokumen.ban[toRow][toCol] = {
                 kind,
                 owner: this.teban,
                 promoted: false
             };
         } else {
             // Normal Move
-            const koma = this.ban[fromRow][fromCol];
+            const koma = nextKyokumen.ban[fromRow][fromCol];
             if (!koma) {
                 throw new Error("No piece to move");
             }
 
-            const target = this.ban[toRow][toCol];
+            const target = nextKyokumen.ban[toRow][toCol];
             if (target) {
                 // Capture
                 const capturedKind = unpromote(target.kind);
-                const komadai = this.teban === "Sente" ? this.komadaiSente : this.komadaiGote;
+                const komadai = this.teban === "Sente" ? nextKyokumen.komadaiSente : nextKyokumen.komadaiGote;
                 komadai[capturedKind]++;
             }
 
-            this.ban[toRow][toCol] = {
+            nextKyokumen.ban[toRow][toCol] = {
                 ...koma,
                 kind: promote ? promoteKoma(koma.kind) : koma.kind,
                 promoted: promote
             };
-            this.ban[fromRow][fromCol] = null;
+            nextKyokumen.ban[fromRow][fromCol] = null;
         }
 
         // Toggle turn
-        this.teban = this.teban === "Sente" ? "Gote" : "Sente";
+        nextKyokumen.teban = this.teban === "Sente" ? "Gote" : "Sente";
 
-        this.lastFromRow = fromRow;
-        this.lastFromCol = fromCol;
-        this.lastToRow = toRow;
-        this.lastToCol = toCol;
+        nextKyokumen.lastFromRow = fromRow;
+        nextKyokumen.lastFromCol = fromCol;
+        nextKyokumen.lastToRow = toRow;
+        nextKyokumen.lastToCol = toCol;
+
+        return nextKyokumen
     }
 
     /** 
@@ -644,6 +648,12 @@ export class Kyokumen {
         }
     }
 
+    isSucidalMove(fromRow: number, fromCol: number, toRow: number, toCol: number): boolean {
+        const nextKyokumen = this.move(fromRow, fromCol, toRow, toCol, false);
+
+        return nextKyokumen.isBeingChecked(this.teban);
+    }
+
     /**
      * 現局面において指し手が成るのが必須かどうか判断する
      * 
@@ -684,6 +694,317 @@ export class Kyokumen {
             ? (fromRow <= 2 || toRow <= 2)
             : (fromRow >= 6 || toRow >= 6);
         return inPromotionZone;
+    }
+
+    isBeingChecked(player: Player): boolean {
+        const opponent = player === "Sente" ? "Gote" : "Sente";
+
+        // 相手の駒の利きを全てチェックする
+        for (let r = 0; r < 9; r++) {
+            for (let c = 0; c < 9; c++) {
+                const koma = this.ban[r][c];
+                if (!koma || koma.owner !== opponent) continue;
+
+                switch (koma.kind) {
+                    case "OU": break;
+                    case "FU":
+                        if (opponent === "Sente") {
+                            if (r - 1 >= 0 && this.ban[r - 1][c]?.kind === "OU" && this.ban[r - 1][c]?.owner === player) {
+                                return true;
+                            }
+                        } else {
+                            if (r + 1 >= 8 && this.ban[r + 1][c]?.kind === "OU" && this.ban[r + 1][c]?.owner === player) {
+                                return true;
+                            }
+                        }
+                        break;
+                    case "KY":
+                        if (opponent === "Sente") {
+                            for (let new_r = r - 1; new_r >= 0; new_r--) {
+                                if (this.ban[new_r][c]?.kind === "OU" && this.ban[new_r][c]?.owner === player) {
+                                    return true;
+                                }
+                                // 利きの途中に玉以外の駒がある場合 
+                                if (this.ban[new_r][c]) break;
+                            }
+                        } else {
+                            for (let new_r = r + 1; new_r <= 8; new_r++) {
+                                if (this.ban[new_r][c]?.kind === "OU" && this.ban[new_r][c]?.owner === player) {
+                                    return true;
+                                }
+                                // 利きの途中に玉以外の駒がある場合 
+                                if (this.ban[new_r][c]) break;
+                            }
+                        }
+                        break;
+                    case "KE":
+                        if (opponent === "Sente") {
+                            if (r - 2 >= 0 && c - 1 >= 0 && this.ban[r - 2][c - 1]?.kind === "OU" && this.ban[r - 2][c - 1]?.owner === player) {
+                                return true;
+                            }
+                            if (r - 2 >= 0 && c + 1 <= 8 && this.ban[r - 2][c + 1]?.kind === "OU" && this.ban[r - 2][c + 1]?.owner === player) {
+                                return true;
+                            }
+                        } else {
+                            if (r + 2 <= 8 && c - 1 >= 0 && this.ban[r + 2][c - 1]?.kind === "OU" && this.ban[r + 2][c - 1]?.owner === player) {
+                                return true;
+                            }
+                            if (r + 2 <= 8 && c + 1 <= 8 && this.ban[r + 2][c + 1]?.kind === "OU" && this.ban[r + 2][c + 1]?.owner === player) {
+                                return true;
+                            }
+                        }
+                        break;
+                    case "GI":
+                        if (opponent === "Sente") {
+                            if (r - 1 >= 0 && this.ban[r - 1][c]?.kind === "OU" && this.ban[r - 1][c]?.owner === player) {
+                                return true;
+                            }
+                            if (r - 1 >= 0 && c - 1 >= 0 && this.ban[r - 1][c - 1]?.kind === "OU" && this.ban[r - 1][c - 1]?.owner === player) {
+                                return true;
+                            }
+                            if (r - 1 >= 0 && c + 1 <= 8 && this.ban[r - 1][c + 1]?.kind === "OU" && this.ban[r - 1][c + 1]?.owner === player) {
+                                return true;
+                            }
+                            if (r + 1 <= 8 && c - 1 >= 0 && this.ban[r + 1][c - 1]?.kind === "OU" && this.ban[r + 1][c - 1]?.owner === player) {
+                                return true;
+                            }
+                            if (r + 1 <= 8 && c + 1 <= 8 && this.ban[r + 1][c + 1]?.kind === "OU" && this.ban[r + 1][c + 1]?.owner === player) {
+                                return true;
+                            }
+                        } else {
+                            if (r - 1 >= 0 && this.ban[r - 1][c]?.kind === "OU" && this.ban[r - 1][c]?.owner === player) {
+                                return true;
+                            }
+                            if (r - 1 >= 0 && c - 1 >= 0 && this.ban[r - 1][c - 1]?.kind === "OU" && this.ban[r - 1][c - 1]?.owner === player) {
+                                return true;
+                            }
+                            if (r - 1 >= 0 && c + 1 <= 8 && this.ban[r - 1][c + 1]?.kind === "OU" && this.ban[r - 1][c + 1]?.owner === player) {
+                                return true;
+                            }
+                            if (r + 1 <= 8 && c - 1 >= 0 && this.ban[r + 1][c - 1]?.kind === "OU" && this.ban[r + 1][c - 1]?.owner === player) {
+                                return true;
+                            }
+                            if (r + 1 <= 8 && c + 1 <= 8 && this.ban[r + 1][c + 1]?.kind === "OU" && this.ban[r + 1][c + 1]?.owner === player) {
+                                return true;
+                            }
+                        }
+                        break;
+                    case "FU+":
+                    case "KY+":
+                    case "KE+":
+                    case "GI+":
+                    case "KI":
+                        if (opponent === "Sente") {
+                            if (r - 1 >= 0 && this.ban[r - 1][c]?.kind === "OU" && this.ban[r - 1][c]?.owner === player) {
+                                return true;
+                            }
+                            if (r + 1 <= 8 && this.ban[r + 1][c]?.kind === "OU" && this.ban[r + 1][c]?.owner === player) {
+                                return true;
+                            }
+                            if (c - 1 >= 0 && this.ban[r][c - 1]?.kind === "OU" && this.ban[r][c - 1]?.owner === player) {
+                                return true;
+                            }
+                            if (c + 1 <= 8 && this.ban[r][c + 1]?.kind === "OU" && this.ban[r][c + 1]?.owner === player) {
+                                return true;
+                            }
+                            if (r + 1 <= 8 && c - 1 >= 0 && this.ban[r + 1][c - 1]?.kind === "OU" && this.ban[r + 1][c - 1]?.owner === player) {
+                                return true;
+                            }
+                            if (r + 1 <= 8 && c + 1 <= 8 && this.ban[r + 1][c + 1]?.kind === "OU" && this.ban[r + 1][c + 1]?.owner === player) {
+                                return true;
+                            }
+                        } else {
+                            if (r + 1 >= 8 && this.ban[r + 1][c]?.kind === "OU" && this.ban[r + 1][c]?.owner === player) {
+                                return true;
+                            }
+                            if (r - 1 >= 0 && this.ban[r - 1][c]?.kind === "OU" && this.ban[r - 1][c]?.owner === player) {
+                                return true;
+                            }
+                            if (c - 1 >= 0 && this.ban[r][c - 1]?.kind === "OU" && this.ban[r][c - 1]?.owner === player) {
+                                return true;
+                            }
+                            if (c + 1 <= 8 && this.ban[r][c + 1]?.kind === "OU" && this.ban[r][c + 1]?.owner === player) {
+                                return true;
+                            }
+                            if (r - 1 <= 8 && c - 1 >= 0 && this.ban[r + 1][c - 1]?.kind === "OU" && this.ban[r + 1][c - 1]?.owner === player) {
+                                return true;
+                            }
+                            if (r - 1 <= 8 && c + 1 <= 8 && this.ban[r + 1][c + 1]?.kind === "OU" && this.ban[r + 1][c + 1]?.owner === player) {
+                                return true;
+                            }
+                        }
+                        break;
+                    case "KA":
+                        // 角は先後対称なので分ける必要がない
+                        // 左上への走査
+                        for (let [new_r, new_c] = [r - 1, c - 1]; new_r >= 0 && c >= 0; new_r--, new_c--) {
+                            if (this.ban[new_r][new_c]?.kind === "OU" && this.ban[new_r][new_c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に玉以外の駒がある場合 
+                            if (this.ban[new_r][new_c]) break;
+                        }
+                        // 右上への走査
+                        for (let [new_r, new_c] = [r - 1, c + 1]; new_r >= 0 && c <= 8; new_r--, new_c++) {
+                            if (this.ban[new_r][new_c]?.kind === "OU" && this.ban[new_r][new_c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に玉以外の駒がある場合 
+                            if (this.ban[new_r][new_c]) break;
+                        }
+                        // 左下への走査
+                        for (let [new_r, new_c] = [r + 1, c - 1]; new_r <= 8 && c >= 0; new_r++, new_c--) {
+                            if (this.ban[new_r][new_c]?.kind === "OU" && this.ban[new_r][new_c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に玉以外の駒がある場合 
+                            if (this.ban[new_r][new_c]) break;
+                        }
+                        // 右下への走査
+                        for (let [new_r, new_c] = [r + 1, c + 1]; new_r <= 8 && c <= 8; new_r++, new_c++) {
+                            if (this.ban[new_r][new_c]?.kind === "OU" && this.ban[new_r][new_c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に玉以外の駒がある場合 
+                            if (this.ban[new_r][new_c]) break;
+                        }
+                        break;
+                    case "HI":
+                        // 上への走査
+                        for (let new_r = r - 1; new_r >= 0; new_r--) {
+                            if (this.ban[new_r][c]?.kind === "OU" && this.ban[new_r][c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に相手玉以外の駒がある場合 
+                            if (this.ban[new_r][c]) break;
+                        }
+                        // 下への走査
+                        for (let new_r = r + 1; new_r <= 8; new_r++) {
+                            if (this.ban[new_r][c]?.kind === "OU" && this.ban[new_r][c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に相手玉以外の駒がある場合 
+                            if (this.ban[new_r][c]) break;
+                        }
+                        // 左への走査
+                        for (let new_c = c - 1; new_c >= 0; new_c--) {
+                            if (this.ban[r][new_c]?.kind === "OU" && this.ban[r][new_c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に相手玉以外の駒がある場合 
+                            if (this.ban[r][new_c]) break;
+                        }
+                        // 右への走査
+                        for (let new_c = c + 1; new_c <= 8; new_c++) {
+                            if (this.ban[r][new_c]?.kind === "OU" && this.ban[r][new_c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に相手玉以外の駒がある場合 
+                            if (this.ban[r][new_c]) break;
+                        }
+                        break;
+                    case "KA+":
+                        // 馬は先後対称なので分ける必要がない
+                        // 上下左右1マスの確認
+                        if (r - 1 >= 0 && this.ban[r - 1][c]?.kind === "OU" && this.ban[r - 1][c]?.owner === player) {
+                            return true;
+                        }
+                        if (r + 1 <= 8 && this.ban[r + 1][c]?.kind === "OU" && this.ban[r + 1][c]?.owner === player) {
+                            return true;
+                        }
+                        if (c - 1 >= 0 && this.ban[r][c - 1]?.kind === "OU" && this.ban[r][c - 1]?.owner === player) {
+                            return true;
+                        }
+                        if (c + 1 <= 8 && this.ban[r][c + 1]?.kind === "OU" && this.ban[r][c + 1]?.owner === player) {
+                            return true;
+                        }
+
+                        // 左上への走査
+                        for (let [new_r, new_c] = [r - 1, c - 1]; new_r >= 0 && c >= 0; new_r--, new_c--) {
+                            if (this.ban[new_r][new_c]?.kind === "OU" && this.ban[new_r][new_c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に玉以外の駒がある場合 
+                            if (this.ban[new_r][new_c]) break;
+                        }
+                        // 右上への走査
+                        for (let [new_r, new_c] = [r - 1, c + 1]; new_r >= 0 && c <= 8; new_r--, new_c++) {
+                            if (this.ban[new_r][new_c]?.kind === "OU" && this.ban[new_r][new_c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に玉以外の駒がある場合 
+                            if (this.ban[new_r][new_c]) break;
+                        }
+                        // 左下への走査
+                        for (let [new_r, new_c] = [r + 1, c - 1]; new_r <= 8 && c >= 0; new_r++, new_c--) {
+                            if (this.ban[new_r][new_c]?.kind === "OU" && this.ban[new_r][new_c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に玉以外の駒がある場合 
+                            if (this.ban[new_r][new_c]) break;
+                        }
+                        // 右下への走査
+                        for (let [new_r, new_c] = [r + 1, c + 1]; new_r <= 8 && c <= 8; new_r++, new_c++) {
+                            if (this.ban[new_r][new_c]?.kind === "OU" && this.ban[new_r][new_c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に玉以外の駒がある場合 
+                            if (this.ban[new_r][new_c]) break;
+                        }
+                        break;
+                    case "HI+":
+                        // 斜め1マスの利きの確認
+                        if (r - 1 >= 0 && c - 1 >= 0 && this.ban[r - 1][c - 1]?.kind === "OU" && this.ban[r - 1][c - 1]?.owner === player) {
+                            return true;
+                        }
+                        if (r - 1 >= 0 && c + 1 <= 8 && this.ban[r - 1][c + 1]?.kind === "OU" && this.ban[r - 1][c + 1]?.owner === player) {
+                            return true;
+                        }
+                        if (r + 1 <= 8 && c - 1 >= 0 && this.ban[r + 1][c - 1]?.kind === "OU" && this.ban[r + 1][c - 1]?.owner === player) {
+                            return true;
+                        }
+                        if (r + 1 <= 8 && c + 1 <= 8 && this.ban[r + 1][c + 1]?.kind === "OU" && this.ban[r + 1][c + 1]?.owner === player) {
+                            return true;
+                        }
+
+                        // 上への走査
+                        for (let new_r = r - 1; new_r >= 0; new_r--) {
+                            if (this.ban[new_r][c]?.kind === "OU" && this.ban[new_r][c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に相手玉以外の駒がある場合 
+                            if (this.ban[new_r][c]) break;
+                        }
+                        // 下への走査
+                        for (let new_r = r + 1; new_r <= 8; new_r++) {
+                            if (this.ban[new_r][c]?.kind === "OU" && this.ban[new_r][c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に相手玉以外の駒がある場合 
+                            if (this.ban[new_r][c]) break;
+                        }
+                        // 左への走査
+                        for (let new_c = c - 1; new_c >= 0; new_c--) {
+                            if (this.ban[r][new_c]?.kind === "OU" && this.ban[r][new_c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に相手玉以外の駒がある場合 
+                            if (this.ban[r][new_c]) break;
+                        }
+                        // 右への走査
+                        for (let new_c = c + 1; new_c <= 8; new_c++) {
+                            if (this.ban[r][new_c]?.kind === "OU" && this.ban[r][new_c]?.owner === player) {
+                                return true;
+                            }
+                            // 利きの途中に相手玉以外の駒がある場合 
+                            if (this.ban[r][new_c]) break;
+                        }
+                        break;
+                }
+            }
+        }
+
+        return false;
     }
 }
 

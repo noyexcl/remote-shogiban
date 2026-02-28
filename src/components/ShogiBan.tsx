@@ -73,6 +73,9 @@ const Shogiban = ({ kifu }: ShogibanProps) => {
             const legal = kyokumen.isLegal(selRow, selCol, row, col);
             if (!legal) return;
 
+            const isSucidalMove = kyokumen.isSucidalMove(selRow, selCol, row, col);
+            if (isSucidalMove) return;
+
             const isMandatoryPromotion = kyokumen.isMandatoryPromotion(selRow, selCol, row);
 
             const canPromote = kyokumen.canPromote(selRow, selCol, row);
@@ -100,6 +103,8 @@ const Shogiban = ({ kifu }: ShogibanProps) => {
         setTesuu(tesuu + 1);
         setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
         setPendingPromotion(null);
+
+        console.log("isBeingChecked :" + kifu.getKyokumen(path.slice(0, tesuu + 1)).isBeingChecked("Sente"));
     };
 
     const handleKomadaiClick = (kind: KomaKind, owner: Player) => {
