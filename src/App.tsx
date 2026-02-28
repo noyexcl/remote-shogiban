@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Kifu } from './models/shogi'
-import Shogiban from './components/Shogiban'
+import ShogiBan from './components/ShogiBan'
 
 
 const APP_CONTAINER_STYLE = "min-h-screen flex flex-col items-center py-12 \
@@ -26,15 +26,15 @@ function App() {
     <div className={APP_CONTAINER_STYLE}>
       <header className={HEADER_STYLE}>
         <h1 className={TITLE_STYLE}>
-          Remote Shogi Ban
+          Remote ShogiBan
         </h1>
         <p className={SUBTITLE_STYLE}>A modern shogi board interface</p>
       </header>
       <main className={MAIN_STYLE}>
-        <Shogiban kifu={kifu} />
+        <ShogiBan kifu={kifu} />
       </main>
       <footer className={FOOTER_STYLE}>
-        &copy; 2026 Remote Shogi Ban
+        &copy; 2026 Remote ShogiBan by Noy!
       </footer>
     </div>
   )

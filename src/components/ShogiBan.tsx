@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getFromRow, Kyokumen } from '../models/shogi';
 import type { Kifu, Koma, KomaKind, Player } from "../models/shogi"
-import { Komadai } from './Komadai';
+import { KomaDai } from './KomaDai';
 import { getKomaImageUrl } from '../util';
 
-interface ShogibanProps {
+interface ShogiBanProps {
     kifu: Kifu;
 }
 
@@ -28,14 +28,14 @@ const CONTEXT_MENU_ITEM_STYLE = "px-4 py-1.5 cursor-pointer hover:bg-sky-50 tran
 
 const PIECE_CONTAINER_STYLE = "w-[55px] h-[55px] absolute cursor-grab select-none active:cursor-grabbing group max-sm:w-[38px] max-sm:h-[38px]";
 
-const Shogiban = ({ kifu }: ShogibanProps) => {
+const ShogiBan = ({ kifu }: ShogiBanProps) => {
     const [selected, setSelected] = useState<[number, number] | null>(null);
     const [selectedKomadai, setSelectedKomadai] = useState<[KomaKind, Player] | null>(null);
     const [tesuu, setTesuu] = useState<number>(0);
     const [path, setPath] = useState<number[]>(Array(500).fill(0));
     const [kyokumen, setKyokumen] = useState<Kyokumen>(kifu.getKyokumen([]));
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, targetTesuu: number } | null>(null);
-    const [reversed, setReversed] = useState<boolean>(true);
+    const [reversed, setReversed] = useState<boolean>(false);
     const [pendingPromotion, setPendingPromotion] = useState<{ fromRow: number, fromCol: number, toRow: number, toCol: number } | null>(null);
 
     const closeContextMenu = useCallback(() => {
@@ -165,7 +165,7 @@ const Shogiban = ({ kifu }: ShogibanProps) => {
     return (
         <div className="flex flex-wrap items-start justify-center gap-4 p-4">
             <div className="flex flex-row items-stretch gap-2">
-                <Komadai
+                <KomaDai
                     owner={reversed ? "Sente" : "Gote"}
                     komadai={reversed ? kyokumen.komadaiSente : kyokumen.komadaiGote}
                     selectedKind={selectedKomadai?.[1] === (reversed ? "Sente" : "Gote") ? selectedKomadai : null}
@@ -203,7 +203,7 @@ const Shogiban = ({ kifu }: ShogibanProps) => {
                     })}
                 </div>
 
-                <Komadai
+                <KomaDai
                     owner={reversed ? "Gote" : "Sente"}
                     komadai={reversed ? kyokumen.komadaiGote : kyokumen.komadaiSente}
                     selectedKind={selectedKomadai?.[1] === (reversed ? "Gote" : "Sente") ? selectedKomadai : null}
@@ -314,4 +314,4 @@ function switchPath(path: number[], at: number, idx: number) {
     return path;
 }
 
-export default Shogiban;
+export default ShogiBan;
