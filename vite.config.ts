@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   return {
-    base: mode === 'github' ? '/remote-shogi-ban/' : '/',
+    base: mode === 'github' ? '/remote-shogiban/' : '/',
     plugins: [react(), tailwindcss()],
   }
 })
