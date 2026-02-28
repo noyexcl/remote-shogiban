@@ -1,5 +1,3 @@
-import { produce } from "immer";
-
 export type Masu = Koma | null;
 
 export type KomaDaiData = Record<Exclude<KomaKind, "FU+" | "KY+" | "KE+" | "GI+" | "KA+" | "HI+">, number>;
@@ -12,7 +10,6 @@ export type Player = "Sente" | "Gote";
 export type Koma = {
     kind: KomaKind;
     owner: Player;
-    promoted: boolean;
 };
 
 export type Sashite = {
@@ -255,73 +252,62 @@ export class Kyokumen {
         this.ban[0][0] = {
             kind: "KY",
             owner: "Gote",
-            promoted: false
         }
 
         this.ban[0][1] = {
             kind: "KE",
             owner: "Gote",
-            promoted: false
         }
 
         this.ban[0][2] = {
             kind: "GI",
             owner: "Gote",
-            promoted: false
         }
 
         this.ban[0][3] = {
             kind: "KI",
-            owner: "Gote", promoted: false
+            owner: "Gote",
         }
 
         this.ban[0][4] = {
             kind: "OU",
             owner: "Gote",
-            promoted: false
         }
 
         this.ban[0][5] = {
             kind: "KI",
             owner: "Gote",
-            promoted: false
         }
 
         this.ban[0][6] = {
             kind: "GI",
             owner: "Gote",
-            promoted: false
         }
 
         this.ban[0][7] = {
             kind: "KE",
             owner: "Gote",
-            promoted: false
         }
 
         this.ban[0][8] = {
             kind: "KY",
             owner: "Gote",
-            promoted: false
         }
 
         this.ban[1][1] = {
             kind: "HI",
             owner: "Gote",
-            promoted: false
         }
 
         this.ban[1][7] = {
             kind: "KA",
             owner: "Gote",
-            promoted: false
         }
 
         for (let col = 0; col < 9; col++) {
             this.ban[2][col] = {
                 kind: "FU",
                 owner: "Gote",
-                promoted: false
             }
         }
 
@@ -329,74 +315,62 @@ export class Kyokumen {
             this.ban[6][col] = {
                 kind: "FU",
                 owner: "Sente",
-                promoted: false
             }
         }
 
         this.ban[7][7] = {
             kind: "HI",
             owner: "Sente",
-            promoted: false
         }
 
         this.ban[7][1] = {
             kind: "KA",
             owner: "Sente",
-            promoted: false
         }
 
         this.ban[8][0] = {
             kind: "KY",
             owner: "Sente",
-            promoted: false
         }
 
         this.ban[8][1] = {
             kind: "KE",
             owner: "Sente",
-            promoted: false
         }
 
         this.ban[8][2] = {
             kind: "GI",
             owner: "Sente",
-            promoted: false
         }
 
         this.ban[8][3] = {
             kind: "KI",
             owner: "Sente",
-            promoted: false
         }
 
         this.ban[8][4] = {
             kind: "OU",
             owner: "Sente",
-            promoted: false
         }
 
         this.ban[8][5] = {
             kind: "KI",
             owner: "Sente",
-            promoted: false
         }
 
         this.ban[8][6] = {
             kind: "GI",
             owner: "Sente",
-            promoted: false
         }
 
         this.ban[8][7] = {
             kind: "KE",
             owner: "Sente",
-            promoted: false
         }
 
         this.ban[8][8] = {
             kind: "KY",
             owner: "Sente",
-            promoted: false
         }
     }
 
@@ -436,7 +410,6 @@ export class Kyokumen {
             nextKyokumen.ban[toRow][toCol] = {
                 kind,
                 owner: this.teban,
-                promoted: false
             };
         } else {
             // Normal Move
@@ -448,7 +421,7 @@ export class Kyokumen {
             const target = nextKyokumen.ban[toRow][toCol];
             if (target) {
                 // Capture
-                const capturedKind = unpromote(target.kind);
+                const capturedKind = unpromoteKoma(target.kind);
                 const komadai = this.teban === "Sente" ? nextKyokumen.komadaiSente : nextKyokumen.komadaiGote;
                 komadai[capturedKind]++;
             }
@@ -456,7 +429,6 @@ export class Kyokumen {
             nextKyokumen.ban[toRow][toCol] = {
                 ...koma,
                 kind: promote ? promoteKoma(koma.kind) : koma.kind,
-                promoted: promote
             };
             nextKyokumen.ban[fromRow][fromCol] = null;
         }
@@ -1008,7 +980,7 @@ export class Kyokumen {
     }
 }
 
-function promote(koma: KomaKind): KomaKind {
+function promoteKoma(koma: KomaKind): KomaKind {
     switch (koma) {
         case "FU":
             return "FU+";
@@ -1027,7 +999,7 @@ function promote(koma: KomaKind): KomaKind {
     }
 }
 
-function unpromote(koma: KomaKind): Exclude<KomaKind, "FU+" | "KY+" | "KE+" | "GI+" | "KA+" | "HI+"> {
+function unpromoteKoma(koma: KomaKind): Exclude<KomaKind, "FU+" | "KY+" | "KE+" | "GI+" | "KA+" | "HI+"> {
     switch (koma) {
         case "FU+":
             return "FU";
@@ -1166,22 +1138,6 @@ function fmtSashite(sashite: Sashite): string {
     }
 
     return `${colStr}${rowStr}${komaKindStr}${sashite.promote ? "成" : ""}`;
-}
-
-/**
- * 駒を成らせる。成れない駒の場合はエラー。
- */
-function promoteKoma(koma: KomaKind): KomaKind {
-    switch (koma) {
-        case "FU": return "FU+";
-        case "KY": return "KY+";
-        case "KE": return "KE+";
-        case "GI": return "GI+";
-        case "KA": return "KA+";
-        case "HI": return "HI+";
-        default:
-            throw new Error(`koma ${koma} cannot be promoted`);
-    }
 }
 
 /**

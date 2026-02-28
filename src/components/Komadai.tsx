@@ -2,7 +2,7 @@ import type { KomaDaiData, KomaKind } from '../models/shogi';
 import { getKomaImageUrl } from '../util';
 import type { Player } from '../models/shogi';
 
-interface KomadaiProps {
+interface KomaDaiProps {
     owner: Player;
     komadai: KomaDaiData;
     selectedKind: [KomaKind, Player] | null;
@@ -18,7 +18,7 @@ const COUNT_STYLE = "text-sm font-bold text-[#333] font-serif";
 
 const ORDER: (keyof KomaDaiData)[] = ["HI", "KA", "KI", "GI", "KE", "KY", "FU"];
 
-export const KomaDai = ({ owner, komadai, selectedKind, onKomaClick, reversed }: KomadaiProps) => {
+export const KomaDai = ({ owner, komadai, selectedKind, onKomaClick, reversed }: KomaDaiProps) => {
     const displayOrder = reversed ? [...ORDER].reverse() : ORDER;
 
     return (

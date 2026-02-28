@@ -156,7 +156,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
         const r = (reversed && koma.owner === 'Sente') || (!reversed && koma.owner === 'Gote');
 
         return (
-            <div className={PIECE_CONTAINER_STYLE} title={`${koma.owner} ${koma.kind}${koma.promoted ? '+' : ''}`}>
+            <div className={PIECE_CONTAINER_STYLE} title={`${koma.owner} ${koma.kind}`}>
                 <img src={getKomaImageUrl(koma.kind, r, koma.owner)} alt={koma.kind} className="w-full h-full object-contain" />
             </div>
         );
