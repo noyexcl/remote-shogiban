@@ -21,5 +21,5 @@ export function getKomaImageUrl(kind: KomaKind, reversed: boolean, owner?: Playe
     }
 
     const suffix = reversed ? '_rev' : '';
-    return `/koma/${name}${suffix}.png`;
+    return `${import.meta.env.BASE_URL}koma/${name}${suffix}.png`;
 }
