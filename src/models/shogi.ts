@@ -1190,9 +1190,9 @@ export function getFromRow(kind: KomaKind, owner: Player) {
                 return 13;
             case "KI":
                 return 14;
-            case "HI":
-                return 15;
             case "KA":
+                return 15;
+            case "HI":
                 return 16;
             default:
                 throw new Error("Invalid koma kind");
@@ -1209,9 +1209,9 @@ export function getFromRow(kind: KomaKind, owner: Player) {
                 return 23;
             case "KI":
                 return 24;
-            case "HI":
-                return 25;
             case "KA":
+                return 25;
+            case "HI":
                 return 26;
             default:
                 throw new Error("Invalid koma kind");
