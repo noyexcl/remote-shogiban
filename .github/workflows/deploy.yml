@@ -25,7 +25,7 @@ jobs:
         run: npm install
 
       - name: Build
-        run: npm run build # ここで dist フォルダが生成される
+        run: npm run build -- --mode github # ここで dist フォルダが生成される
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
