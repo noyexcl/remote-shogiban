@@ -37,6 +37,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, targetTesuu: number } | null>(null);
     const [reversed, setReversed] = useState<boolean>(false);
     const [pendingPromotion, setPendingPromotion] = useState<{ fromRow: number, fromCol: number, toRow: number, toCol: number } | null>(null);
+    const [showCopied, setShowCopied] = useState(false);
 
     const closeContextMenu = useCallback(() => {
         setContextMenu(null);
@@ -144,6 +145,14 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
         setSelected(null);
         setSelectedKomadai(null);
     }
+    
+    const handleExportUSI = () => {
+        const usi = kifu.toUSI(path.slice(0, tesuu));
+        navigator.clipboard.writeText(usi).then(() => {
+            setShowCopied(true);
+            setTimeout(() => setShowCopied(false), 2000);
+        });
+    };
 
     const [sashiteList, branchMap] = useMemo(() => kifu.getSashiteList(path), [kifu, path, kyokumen]);
     const currentBranches = branchMap[tesuu] || [];
@@ -211,12 +220,25 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
             </div>
 
             <div className="flex flex-col gap-4">
-                <button
-                    onClick={() => setReversed(!reversed)}
-                    className="px-4 py-2 bg-stone-700 text-white rounded hover:bg-stone-600 transition-colors shadow-sm font-bold"
-                >
-                    盤面を反転
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setReversed(!reversed)}
+                        className="flex-1 px-4 py-2 bg-stone-700 text-white rounded hover:bg-stone-600 transition-colors shadow-sm font-bold"
+                    >
+                        盤面を反転
+                    </button>
+                    <button
+                        onClick={handleExportUSI}
+                        className="flex-1 px-4 py-2 bg-sky-600 text-white rounded hover:bg-sky-700 transition-colors shadow-sm font-bold relative"
+                    >
+                        Export as USI
+                        {showCopied && (
+                            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-stone-800 text-white text-xs py-1 px-2 rounded shadow-lg animate-bounce">
+                                Copied!
+                            </span>
+                        )}
+                    </button>
+                </div>
                 <div className={LIST_STYLE}>
                     <div className="p-2 border-b border-[#ccc] bg-[#eee] font-bold text-sm flex items-center justify-between sticky top-0">
                         棋譜
