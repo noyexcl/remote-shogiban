@@ -103,8 +103,6 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
         setTesuu(tesuu + 1);
         setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
         setPendingPromotion(null);
-
-        console.log("isBeingChecked :" + kifu.getKyokumen(path.slice(0, tesuu + 1)).isBeingChecked("Sente"));
     };
 
     const handleKomadaiClick = (kind: KomaKind, owner: Player) => {

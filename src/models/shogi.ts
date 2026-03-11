@@ -113,8 +113,7 @@ export class Kifu {
         const kyokumen = this.getKyokumen(path);
 
         if (!kyokumen.isLegal(fromRow, fromCol, toRow, toCol)) {
-            throw new Error(`Invalid sashite: ${path.length + 1}手目, from(${fromRow}, \\
-                    ${fromCol}) to(${toRow}, ${toCol}) ${promote ? "+" : ""}`);
+            throw new Error(`Invalid sashite: ${path.length + 1}手目, from(${fromRow}, ${fromCol}) to(${toRow}, ${toCol}) ${promote ? "+" : ""}`);
         }
 
         let komaKind: KomaKind;
@@ -195,6 +194,25 @@ export class Kifu {
         }
 
         return [list, branchList];
+    }
+
+    toUSI(path: number[]): string {
+        let sfen = this.startKyokumen.toSFEN();
+
+        if (sfen === "sfen lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1") {
+            sfen = "startpos";
+        }
+
+        let usi = "position " + sfen + " moves";
+
+        let sashite = this.root;
+
+        for (const idx of path) {
+            sashite = sashite.next[idx];
+            usi += " " + sashiteToUSI(sashite);
+        }
+
+        return usi;
     }
 }
 
@@ -978,6 +996,48 @@ export class Kyokumen {
 
         return false;
     }
+
+    toSFEN(): string {
+        let sfen = "sfen ";
+
+        for (let r = 0; r < 9; r++) {
+            let emptyCount = 0;
+            for (let c = 0; c < 9; c++) {
+                const koma = this.ban[r][c];
+                if (koma) {
+                    if (emptyCount > 0) {
+                        sfen += emptyCount;
+                        emptyCount = 0;
+                    }
+                    sfen += komaToSFEN(koma.kind, koma.owner);
+                } else {
+                    emptyCount++;
+                }
+            }
+            if (emptyCount > 0) {
+                sfen += emptyCount;
+            }
+
+            // 最後の行以外は区切り文字を追加
+            if (r != 8) sfen += "/";
+        }
+
+        sfen += this.teban === "Sente" ? " b " : " w ";
+
+        let komadaiSFEN = "";
+        komadaiSFEN += komadaiToSFEN(this.komadaiSente, "Sente");
+        komadaiSFEN += komadaiToSFEN(this.komadaiGote, "Gote");
+
+        if (komadaiSFEN !== "") {
+            sfen += komadaiSFEN;
+        } else {
+            sfen += "-";
+        }
+
+        sfen += " 1";
+
+        return sfen;
+    }
 }
 
 function promoteKoma(koma: KomaKind): KomaKind {
@@ -1139,6 +1199,138 @@ function fmtSashite(sashite: Sashite): string {
 
     return `${colStr}${rowStr}${komaKindStr}${sashite.promote ? "成" : ""}`;
 }
+
+function komaToSFEN(komaKind: KomaKind, owner: Player): string {
+    if (owner === "Sente") {
+        switch (komaKind) {
+            case "OU":
+                return "K";
+            case "HI":
+                return "R";
+            case "KA":
+                return "B";
+            case "KI":
+                return "G";
+            case "GI":
+                return "S";
+            case "KE":
+                return "N";
+            case "KY":
+                return "L";
+            case "FU":
+                return "P";
+            case "FU+":
+                return "+P";
+            case "KY+":
+                return "+L";
+            case "KE+":
+                return "+N";
+            case "GI+":
+                return "+S";
+            case "KA+":
+                return "+B";
+            case "HI+":
+                return "+R";
+        }
+    } else {
+        switch (komaKind) {
+            case "OU":
+                return "k";
+            case "HI":
+                return "r";
+            case "KA":
+                return "b";
+            case "KI":
+                return "g";
+            case "GI":
+                return "s";
+            case "KE":
+                return "n";
+            case "KY":
+                return "l";
+            case "FU":
+                return "p";
+            case "FU+":
+                return "+p";
+            case "KY+":
+                return "+l";
+            case "KE+":
+                return "+n";
+            case "GI+":
+                return "+s";
+            case "KA+":
+                return "+b";
+            case "HI+":
+                return "+r";
+        }
+    }
+}
+
+function komadaiToSFEN(komaDai: KomaDaiData, owner: Player): string {
+    const komaKinds: Exclude<KomaKind, "FU+" | "KY+" | "KE+" | "GI+" | "KA+" | "HI+">[] = ["HI", "KA", "KI", "GI", "KE", "KY", "FU"];
+    let result = "";
+
+    for (const komaKind of komaKinds) {
+        const count = komaDai[komaKind];
+        if (count === 0) {
+            continue;
+        } else if (count === 1) {
+            result += komaToSFEN(komaKind, owner);
+        } else {
+            result += count + komaToSFEN(komaKind, owner);
+        }
+    }
+
+    return result;
+}
+
+function sashiteToUSI(sashite: Sashite): string {
+    let result = "";
+
+    if (sashite.fromRow >= 10) {
+        result += dropMoveToUSI(sashite.fromRow);
+    } else {
+        result += (9 - sashite.fromCol).toString();
+        result += rowToAlphabet(sashite.fromRow);
+    }
+
+    result += (9 - sashite.toCol).toString();
+    result += rowToAlphabet(sashite.toRow);
+
+    result += sashite.promote ? "+" : "";
+
+    return result;
+}
+
+function rowToAlphabet(row: number): string {
+    switch (row) {
+        case 0: return "a";
+        case 1: return "b";
+        case 2: return "c";
+        case 3: return "d";
+        case 4: return "e";
+        case 5: return "f";
+        case 6: return "g";
+        case 7: return "h";
+        case 8: return "i";
+        default: throw new Error(`${row} is invalid row number`);
+    }
+}
+
+function dropMoveToUSI(fromRow: number): string {
+    switch (fromRow % 10) {
+        case 0: return "P*";
+        case 1: return "L*";
+        case 2: return "N*";
+        case 3: return "S*";
+        case 4: return "G*";
+        case 5: return "B*";
+        case 6: return "R*";
+        default: throw new Error(`${fromRow} is not a drop move`);
+    }
+}
+
+
 
 /**
  * 駒台の駒を打つ時のfromRowから駒の種類を返す
