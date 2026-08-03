@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getFromRow, Kyokumen } from '../models/shogi';
 import type { Kifu, Koma, KomaKind, Player } from "../models/shogi"
 import { KomaDai } from './KomaDai';
+import EvalBar from './EvalBar';
 import { getKomaImageUrl } from '../util';
+import { useShogiAi } from '../hooks/useShogiAi';
 
 interface ShogiBanProps {
     kifu: Kifu;
@@ -38,6 +40,9 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
     const [reversed, setReversed] = useState<boolean>(false);
     const [pendingPromotion, setPendingPromotion] = useState<{ fromRow: number, fromCol: number, toRow: number, toCol: number } | null>(null);
     const [showCopied, setShowCopied] = useState(false);
+    const [following, setFollowing] = useState<boolean>(false);
+
+    const { analyze, clear, isAnalyzing, latestInfo } = useShogiAi();
 
     const closeContextMenu = useCallback(() => {
         setContextMenu(null);
@@ -145,7 +150,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
         setSelected(null);
         setSelectedKomadai(null);
     }
-    
+
     const handleExportUSI = () => {
         const usi = kifu.toUSI(path.slice(0, tesuu));
         navigator.clipboard.writeText(usi).then(() => {
@@ -154,7 +159,23 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
         });
     };
 
-    const [sashiteList, branchMap] = useMemo(() => kifu.getSashiteList(path), [kifu, path, kyokumen]);
+    const handleToggleAnalyze = () => {
+        if (following) {
+            setFollowing(false);
+            clear();
+        } else {
+            setFollowing(true);
+        }
+    };
+
+    useEffect(() => {
+        if (!following) return;
+        analyze(kyokumen).catch(() => {
+            alert("AI検討に失敗しました");
+        });
+    }, [following, kyokumen, analyze]);
+
+    const [sashiteList, branchMap] = useMemo(() => kifu.getSashiteList(path), [kifu, path]);
     const currentBranches = branchMap[tesuu] || [];
 
     const renderKoma = (koma: Koma | null) => {
@@ -227,6 +248,15 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                     >
                         盤面を反転
                     </button>
+                    {/* 将棋AIに検討させるためのボタン */}
+                    <button
+                        onClick={handleToggleAnalyze}
+                        className={`flex-1 px-4 py-2 text-white rounded transition-colors shadow-sm font-bold ${
+                            following ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-600 hover:bg-indigo-700'
+                        }`}
+                    >
+                        {following ? "中止" : "検討"}
+                    </button>
                     <button
                         onClick={handleExportUSI}
                         className="flex-1 px-4 py-2 bg-sky-600 text-white rounded hover:bg-sky-700 transition-colors shadow-sm font-bold relative"
@@ -239,6 +269,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                         )}
                     </button>
                 </div>
+                <EvalBar kyokumen={kyokumen} info={latestInfo} isAnalyzing={isAnalyzing} />
                 <div className={LIST_STYLE}>
                     <div className="p-2 border-b border-[#ccc] bg-[#eee] font-bold text-sm flex items-center justify-between sticky top-0">
                         棋譜

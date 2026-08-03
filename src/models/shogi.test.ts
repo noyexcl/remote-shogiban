@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from "vitest";
+import { describe, test, expect } from "vitest";
 import { Kifu, Kyokumen, type Koma, type Masu } from "./shogi";
 
 
@@ -35,6 +35,17 @@ describe("SFEN format tests", () => {
         kyokumen.teban = "Gote";
 
         expect(kyokumen.toSFEN()).toBe("sfen lnsgkgsnl/2r6/p2ppp1pp/2P3p2/1P7/9/P2PPPPPP/1R7/LN1GKGSNL w B2Pbs 1");
+    });
+
+    test("Promoted pieces and captured piece", () => {
+        const kifu = new Kifu();
+        appendSashite(kifu, [], 7, 7, 7, 6, false);
+        appendSashite(kifu, [0], 3, 3, 3, 4, false);
+        appendSashite(kifu, [0, 0], 8, 8, 2, 2, true);
+
+        const kyokumen = kifu.getKyokumen([0, 0, 0]);
+
+        expect(kyokumen.toSFEN()).toBe("sfen lnsgkgsnl/1r5+B1/pppppp1pp/6p2/9/2P6/PP1PPPPPP/7R1/LNSGKGSNL w B 1");
     });
 });
 

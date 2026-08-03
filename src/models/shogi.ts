@@ -585,7 +585,7 @@ export class Kyokumen {
                 if (rowDiff === 0 && Math.abs(colDiff) === 1) return true;
                 if (rowDiff === -forward && colDiff === 0) return true;
                 return false;
-            case "KA":
+            case "KA": {
                 if (Math.abs(rowDiff) !== Math.abs(colDiff)) return false;
                 const rStepKA = rowDiff > 0 ? 1 : -1;
                 const cStepKA = colDiff > 0 ? 1 : -1;
@@ -593,7 +593,8 @@ export class Kyokumen {
                     if (this.ban[fromRow + i * rStepKA][fromCol + i * cStepKA]) return false;
                 }
                 return true;
-            case "KA+":
+            }
+            case "KA+": {
                 if (Math.abs(rowDiff) <= 1 && Math.abs(colDiff) <= 1) return true;
                 if (Math.abs(rowDiff) !== Math.abs(colDiff)) return false;
                 const rStepUMA = rowDiff > 0 ? 1 : -1;
@@ -602,6 +603,7 @@ export class Kyokumen {
                     if (this.ban[fromRow + i * rStepUMA][fromCol + i * cStepUMA]) return false;
                 }
                 return true;
+            }
             case "HI":
                 if (rowDiff !== 0 && colDiff !== 0) return false;
                 if (rowDiff !== 0) {

@@ -7,5 +7,10 @@ export default defineConfig(({ mode }) => {
   return {
     base: mode === 'github' ? '/remote-shogiban/' : '/',
     plugins: [react(), tailwindcss()],
+    server: {
+      proxy: {
+        '/api': 'http://localhost:8080',
+      },
+    },
   }
 })
