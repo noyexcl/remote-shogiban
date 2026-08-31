@@ -29,15 +29,28 @@ export const useShogiAi = () => {
         setResult([]);
         setLatestInfo(null);
 
-        const infos: EvalInfo[] = [];
+        // multipv ごとに最新の情報を保持し、最善候補(multipv=1)のみを表示するために使う
+        const byMultiPv = new Map<number, EvalInfo>();
+
+        const pickBest = (map: Map<number, EvalInfo>): EvalInfo | null => {
+            if (map.size === 0) return null;
+            const bestKey = Math.min(...map.keys());
+            return map.get(bestKey) ?? null;
+        };
 
         try {
             for await (const info of streamEval(kyokumen, controller.signal)) {
-                infos.push(info);
-                setResult([...infos]);
-                setLatestInfo(info);
+                const key = info.multipv ?? 1;
+                byMultiPv.set(key, info);
+                const sorted = [...byMultiPv.values()].sort(
+                    (a, b) => (a.multipv ?? 1) - (b.multipv ?? 1),
+                );
+                setResult(sorted);
+                setLatestInfo(pickBest(byMultiPv));
             }
-            return infos;
+            return [...byMultiPv.values()].sort(
+                (a, b) => (a.multipv ?? 1) - (b.multipv ?? 1),
+            );
         } catch (err) {
             if (!controller.signal.aborted) {
                 const message = err instanceof Error ? err.message : 'AI検討中にエラーが発生しました';
@@ -50,7 +63,9 @@ export const useShogiAi = () => {
             }
         }
 
-        return infos;
+        return [...byMultiPv.values()].sort(
+            (a, b) => (a.multipv ?? 1) - (b.multipv ?? 1),
+        );
     }, []);
 
     /**

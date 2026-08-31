@@ -14,6 +14,8 @@ export function toSentePerspective(score: EvalScore, teban: Player): EvalScore {
 
 /** SSE event data for a single info line from the engine */
 export interface EvalInfo {
+    /** MultiPV設定時の候補手番号 (1=最善手)。単一候補時はエンジンから送られない場合がある */
+    multipv?: number;
     depth?: number;
     score?: EvalScore;
     pv?: string[];

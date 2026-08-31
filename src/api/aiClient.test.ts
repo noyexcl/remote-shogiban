@@ -100,6 +100,41 @@ describe("streamEval", () => {
         expect(received).toEqual([{ depth: 4, score: { type: "cp", value: 12 } }]);
     });
 
+    test("preserves multipv field for multi-candidate evaluations", async () => {
+        const body = [
+            'data: {"multipv":2,"depth":12,"score":{"type":"cp","value":-34},"pv":["3c3d"],"nodes":300,"nps":9000}',
+            "",
+            'data: {"multipv":1,"depth":12,"score":{"type":"cp","value":120},"pv":["7g7f","3c3d"],"nodes":300}',
+            "",
+        ].join("\n");
+        mockFetch(body);
+
+        const kyokumen = new Kyokumen();
+        kyokumen.init();
+
+        const received: EvalInfo[] = [];
+        for await (const info of streamEval(kyokumen)) {
+            received.push(info);
+        }
+
+        expect(received).toHaveLength(2);
+        expect(received[0]).toEqual({
+            multipv: 2,
+            depth: 12,
+            score: { type: "cp", value: -34 },
+            pv: ["3c3d"],
+            nodes: 300,
+            nps: 9000,
+        });
+        expect(received[1]).toEqual({
+            multipv: 1,
+            depth: 12,
+            score: { type: "cp", value: 120 },
+            pv: ["7g7f", "3c3d"],
+            nodes: 300,
+        });
+    });
+
     test("throws when the response is not ok", async () => {
         vi.stubGlobal("fetch", vi.fn(async () => new Response("Internal Server Error", { status: 500 })));
 
