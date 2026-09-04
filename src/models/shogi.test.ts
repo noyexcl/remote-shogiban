@@ -95,6 +95,46 @@ describe("USI format tests", () => {
     })
 })
 
+describe("getSashiteList tests", () => {
+    test("Start position returns only 開始局面", () => {
+        const kifu = new Kifu();
+        const [list, branchList] = kifu.getSashiteList(Array(500).fill(0));
+        expect(list).toEqual(["開始局面"]);
+        expect(branchList).toEqual({});
+    });
+
+    test("Sequential moves along main branch", () => {
+        const kifu = new Kifu();
+        appendSashite(kifu, [], 7, 7, 7, 6, false);
+        appendSashite(kifu, [0], 3, 3, 3, 4, false);
+        appendSashite(kifu, [0, 0], 8, 8, 2, 2, true);
+
+        const [list, branchList] = kifu.getSashiteList(Array(500).fill(0));
+        expect(list).toEqual(["開始局面", "７六歩", "３四歩", "２二角成"]);
+        expect(branchList).toEqual({});
+    });
+
+    test("Branching moves record branchList and reflect active path", () => {
+        const kifu = new Kifu();
+        // Move 1: 7七歩 -> 7六歩 (branch 0)
+        appendSashite(kifu, [], 7, 7, 7, 6, false);
+        // Move 1 branch: 2七歩 -> 2六歩 (branch 1)
+        appendSashite(kifu, [], 2, 7, 2, 6, false);
+
+        // Path following branch 0
+        const path0 = Array(500).fill(0);
+        const [list0, branchList0] = kifu.getSashiteList(path0);
+        expect(list0).toEqual(["開始局面", "７六歩"]);
+        expect(branchList0[0]).toEqual(["７六歩", "２六歩"]);
+
+        // Path following branch 1
+        const path1 = [1, ...Array(499).fill(0)];
+        const [list1, branchList1] = kifu.getSashiteList(path1);
+        expect(list1).toEqual(["開始局面", "２六歩"]);
+        expect(branchList1[0]).toEqual(["７六歩", "２六歩"]);
+    });
+});
+
 /** For setting up test kifu by hand, it's a bit tricky to use indices to represent moves, so we have this helper function
 */
 function appendSashite(kifu: Kifu, path: number[], fromSuji: number, fromDan: number, toSuji: number, toDan: number, promote: boolean) {

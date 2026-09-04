@@ -99,15 +99,13 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
     const executeMove = (fRow: number, fCol: number, tRow: number, tCol: number, promote: boolean) => {
         const nextBranchIdx = kifu.addSashite(path.slice(0, tesuu), fRow, fCol, tRow, tCol, promote);
 
-        if (nextBranchIdx !== path[tesuu]) {
-            switchPath(path, tesuu, nextBranchIdx);
-            setPath([...path]);
-        }
+        const newPath = switchPath(path, tesuu, nextBranchIdx);
+        setPath(newPath);
 
         setSelected(null);
         setSelectedKomadai(null);
         setTesuu(tesuu + 1);
-        setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
+        setKyokumen(kifu.getKyokumen(newPath.slice(0, tesuu + 1)));
         setPendingPromotion(null);
     };
 
@@ -127,13 +125,11 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
     };
 
     const handleBranchClick = (branchIdx: number) => {
-        if (branchIdx !== path[tesuu]) {
-            switchPath(path, tesuu, branchIdx);
-            setPath([...path]);
-        }
+        const newPath = switchPath(path, tesuu, branchIdx);
+        setPath(newPath);
 
         setTesuu(tesuu + 1);
-        setKyokumen(kifu.getKyokumen(path.slice(0, tesuu + 1)));
+        setKyokumen(kifu.getKyokumen(newPath.slice(0, tesuu + 1)));
         setSelected(null);
         setSelectedKomadai(null);
     };
@@ -141,15 +137,15 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
     const handleDeleteSashite = (targetTesuu: number) => {
         if (targetTesuu === 0) return;
         kifu.removeSashite(path.slice(0, targetTesuu));
+        const newPath = switchPath(path, targetTesuu - 1, 0);
         if (targetTesuu <= tesuu) {
             setTesuu(targetTesuu - 1);
-            setKyokumen(kifu.getKyokumen(path.slice(0, targetTesuu - 1)));
+            setKyokumen(kifu.getKyokumen(newPath.slice(0, targetTesuu - 1)));
         }
-        switchPath(path, targetTesuu - 1, 0);
-        setPath([...path]);
+        setPath(newPath);
         setSelected(null);
         setSelectedKomadai(null);
-    }
+    };
 
     const handleExportUSI = () => {
         const usi = kifu.toUSI(path.slice(0, tesuu));
@@ -251,9 +247,8 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                     {/* 将棋AIに検討させるためのボタン */}
                     <button
                         onClick={handleToggleAnalyze}
-                        className={`flex-1 px-4 py-2 text-white rounded transition-colors shadow-sm font-bold ${
-                            following ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-600 hover:bg-indigo-700'
-                        }`}
+                        className={`flex-1 px-4 py-2 text-white rounded transition-colors shadow-sm font-bold ${following ? 'bg-red-500 hover:bg-red-600' : 'bg-indigo-600 hover:bg-indigo-700'
+                            }`}
                     >
                         {following ? "中止" : "検討"}
                     </button>
@@ -355,14 +350,15 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
     );
 };
 
-function switchPath(path: number[], at: number, idx: number) {
-    path[at] = idx;
+function switchPath(path: number[], at: number, idx: number): number[] {
+    const newPath = [...path];
+    newPath[at] = idx;
 
-    for (let i = at + 1; i < path.length; i++) {
-        path[i] = 0;
+    for (let i = at + 1; i < newPath.length; i++) {
+        newPath[i] = 0;
     }
 
-    return path;
+    return newPath;
 }
 
 export default ShogiBan;
