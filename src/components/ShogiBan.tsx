@@ -42,7 +42,7 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
     const [showCopied, setShowCopied] = useState(false);
     const [following, setFollowing] = useState<boolean>(false);
 
-    const { analyze, clear, isAnalyzing, latestInfo } = useShogiAi();
+    const { analyze, clear, isAnalyzing, result } = useShogiAi();
 
     const closeContextMenu = useCallback(() => {
         setContextMenu(null);
@@ -188,7 +188,8 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
 
     return (
         <div className="flex flex-wrap items-start justify-center gap-4 p-4">
-            <div className="flex flex-row items-stretch gap-2">
+            <div className="flex flex-col gap-2">
+                <div className="flex flex-row items-stretch gap-2">
                 <KomaDai
                     owner={reversed ? "Sente" : "Gote"}
                     komadai={reversed ? kyokumen.komadaiSente : kyokumen.komadaiGote}
@@ -234,6 +235,9 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                     onKomaClick={handleKomadaiClick}
                     reversed={false}
                 />
+                </div>
+                {/* 将棋盤の下にAI解析結果を表示する */}
+                <EvalBar kyokumen={kyokumen} infos={result.slice(0, 3)} isAnalyzing={isAnalyzing} />
             </div>
 
             <div className="flex flex-col gap-4">
@@ -264,7 +268,6 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
                         )}
                     </button>
                 </div>
-                <EvalBar kyokumen={kyokumen} info={latestInfo} isAnalyzing={isAnalyzing} />
                 <div className={LIST_STYLE}>
                     <div className="p-2 border-b border-[#ccc] bg-[#eee] font-bold text-sm flex items-center justify-between sticky top-0">
                         棋譜
