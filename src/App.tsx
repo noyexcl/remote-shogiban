@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Kifu } from './models/shogi'
 import ShogiBan from './components/ShogiBan'
 
@@ -18,9 +18,29 @@ bg-white border border-stone-200";
 const FOOTER_STYLE = "mt-12 text-sm text-stone-500";
 
 function App() {
-  const [kifu] = useState(() => {
+  const [kifu, setKifu] = useState(() => {
     return new Kifu();
   });
+  const [kifuVersion, setKifuVersion] = useState(0);
+
+  useEffect(() => {
+    const handlePaste = (event: ClipboardEvent) => {
+      const text = event.clipboardData?.getData('text/plain') ?? '';
+
+      try {
+        setKifu(Kifu.fromKif(text));
+        setKifuVersion((version) => version + 1);
+      } catch (error) {
+        const emptyKifu = new Kifu();
+        setKifu(emptyKifu);
+        setKifuVersion((version) => version + 1);
+        console.error('KIFの読み込みに失敗しました', error);
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, []);
 
   return (
     <div className={APP_CONTAINER_STYLE}>
@@ -31,7 +51,7 @@ function App() {
         <p className={SUBTITLE_STYLE}>A modern shogi board interface</p>
       </header>
       <main className={MAIN_STYLE}>
-        <ShogiBan kifu={kifu} />
+        <ShogiBan key={kifuVersion} kifu={kifu} />
       </main>
       <footer className={FOOTER_STYLE}>
         &copy; 2026 Remote ShogiBan by Noy!

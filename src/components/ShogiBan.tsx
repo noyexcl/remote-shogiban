@@ -44,6 +44,8 @@ const ShogiBan = ({ kifu }: ShogiBanProps) => {
 
     const { analyze, clear, isAnalyzing, result } = useShogiAi();
 
+    useEffect(() => () => clear(), [clear]);
+
     const closeContextMenu = useCallback(() => {
         setContextMenu(null);
     }, []);

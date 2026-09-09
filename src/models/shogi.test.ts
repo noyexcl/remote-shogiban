@@ -95,6 +95,126 @@ describe("USI format tests", () => {
     })
 })
 
+describe("KIF parsing tests", () => {
+    test("Parses a standard KIF main line", () => {
+        const kifu = Kifu.fromKif(`手合割：平手
+
+手数----指手---------消費時間--
+   1 ７六歩(77)   ( 0:00/00:00:00)
+* 初手のコメント
+   2 ３四歩(33)   ( 0:00/00:00:00)
+   3 ２六歩(27)   ( 0:00/00:00:00)
+   4 ８四歩(83)   ( 0:00/00:00:00)
+`);
+
+        expect(kifu.toUSI([0, 0, 0, 0])).toBe("position startpos moves 7g7f 3c3d 2g2f 8c8d");
+        expect(kifu.getSashite([0]).comment).toBe("初手のコメント");
+    });
+
+    test("Parses promotion, drops, 同, and comments", () => {
+        const kifu = Kifu.fromKif(`手合割：平手
+手数----指手---------消費時間--
+   1 ７六歩(77)
+   2 ３四歩(33)
+   3 ２二角成(88)
+   4 ２二銀(31)
+`);
+
+        const promotedPosition = kifu.getKyokumen([0, 0, 0]);
+        expect(promotedPosition.ban[1][7]).toEqual({ kind: "KA+", owner: "Sente" });
+        const finalKyokumen = kifu.getKyokumen([0, 0, 0, 0]);
+        expect(finalKyokumen.ban[1][7]).toEqual({ kind: "GI", owner: "Gote" });
+        expect(kifu.toUSI([0, 0, 0, 0])).toContain("8h2b+");
+    });
+
+    test("Parses 同 and a piece drop", () => {
+        const kifu = Kifu.fromKif(`手合割：平手
+手数----指手---------消費時間--
+   1 ７六歩(77)
+   2 ３四歩(33)
+   3 ２六歩(27)
+   4 ８四歩(83)
+   5 ２五歩(26)
+   6 ８五歩(84)
+   7 ７八金(69)
+   8 ３二金(41)
+   9 ２四歩(25)
+  10 同歩(23)
+  11 同飛(28)
+`);
+
+        const finalKyokumen = kifu.getKyokumen(Array(11).fill(0));
+        expect(finalKyokumen.ban[3][7]).toEqual({ kind: "HI", owner: "Sente" });
+
+        const dropKifu = Kifu.fromKif(`手合割：平手
+手数----指手---------消費時間--
+   1 ７六歩(77)
+   2 ３四歩(33)
+   3 ２二角成(88)
+   4 ２二銀(31)
+   5 ４四角打
+`);
+        const dropPosition = dropKifu.getKyokumen(Array(5).fill(0));
+        expect(dropPosition.ban[3][5]).toEqual({ kind: "KA", owner: "Sente" });
+        expect(dropPosition.komadaiSente.KA).toBe(0);
+    });
+
+    test("Rejects malformed KIF", () => {
+        expect(() => Kifu.fromKif("手合割：平手\n手数----指手---------消費時間--\n   1 ７六歩")).toThrow();
+    });
+
+    test("Parses a variation from the indicated move number", () => {
+        const kifu = Kifu.fromKif(`手合割：平手
+先手：
+後手：
+手数----指手---------消費時間--
+   1 ７六歩(77)        ( 0:00/00:00:00)
+   2 ３四歩(33)        ( 0:00/00:00:00)
+
+変化：2手
+   2 ８四歩(83)        ( 0:00/00:00:00)
+   3 ２六歩(27)        ( 0:00/00:00:00)
+   4 ８五歩(84)        ( 0:00/00:00:00)
+* コメント
+   5 ７七角(88)        ( 0:00/00:00:00)
+`);
+
+        expect(kifu.root.next).toHaveLength(1);
+        expect(kifu.root.next[0].next).toHaveLength(2);
+        expect(kifu.toUSI([0, 0])).toBe("position startpos moves 7g7f 3c3d");
+        expect(kifu.toUSI([0, 1, 0, 0, 0])).toBe("position startpos moves 7g7f 8c8d 2g2f 8d8e 8h7g");
+        expect(kifu.getSashite([0, 1, 0, 0]).comment).toBe("コメント");
+    });
+
+    test("Rejects a variation whose starting position does not exist", () => {
+        expect(() => Kifu.fromKif(`手合割：平手
+手数----指手---------消費時間--
+   1 ７六歩(77)
+
+変化：3手
+   3 ２六歩(27)
+`)).toThrow("変化の開始位置が存在しません");
+    });
+
+    test("Parses multiple variations from the same move number", () => {
+        const kifu = Kifu.fromKif(`手合割：平手
+手数----指手---------消費時間--
+   1 ７六歩(77)
+   2 ３四歩(33)
+
+変化：2手
+   2 ８四歩(83)
+
+変化：2手
+   2 ４四歩(43)
+   3 ７八金(69)
+`);
+
+        expect(kifu.root.next[0].next).toHaveLength(3);
+        expect(kifu.toUSI([0, 2, 0])).toBe("position startpos moves 7g7f 4c4d 6i7h");
+    });
+});
+
 describe("getSashiteList tests", () => {
     test("Start position returns only 開始局面", () => {
         const kifu = new Kifu();

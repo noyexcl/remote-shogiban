@@ -49,6 +49,11 @@ export class Kifu {
         };
     }
 
+    /** Parse a Japanese KIF record into a playable kifu. */
+    static fromKif(text: string): Kifu {
+        return parseKif(text);
+    }
+
     /**
      * Return the kyokumen after n手目 is played, following the branches.
      * 
@@ -1329,6 +1334,208 @@ function dropMoveToUSI(fromRow: number): string {
         case 5: return "B*";
         case 6: return "R*";
         default: throw new Error(`${fromRow} is not a drop move`);
+    }
+}
+
+export class KifParseError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "KifParseError";
+    }
+}
+
+/** Parse the main line of a standard Japanese KIF record. */
+function parseKif(text: string): Kifu {
+    if (text.trim() === "") {
+        throw new KifParseError("KIFが空です");
+    }
+
+    const kifu = new Kifu();
+    const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
+    const handicapLine = lines.map((line) => line.trim()).find((line) => line.startsWith("手合割："));
+    if (handicapLine) {
+        applyKifHandicap(kifu.startKyokumen, handicapLine.slice("手合割：".length).trim());
+    }
+
+    let activePath: number[] = [];
+    let activeMoveNumber = 1;
+    let lastMove: Sashite | null = null;
+    let sawMove = false;
+
+    for (const [lineIndex, rawLine] of lines.entries()) {
+        const line = rawLine.trimEnd();
+        if (line.startsWith("*") && lastMove) {
+            const comment = line.slice(1).trim();
+            lastMove.comment = lastMove.comment === "" ? comment : `${lastMove.comment}\n${comment}`;
+            continue;
+        }
+
+        const variationMatch = line.trim().match(/^変化：\s*(\d+)\s*手$/);
+        if (variationMatch) {
+            const variationMoveNumber = Number(variationMatch[1]);
+            if (!Number.isInteger(variationMoveNumber) || variationMoveNumber < 1) {
+                throw new KifParseError(`${lineIndex + 1}行目: 変化の手数が不正です`);
+            }
+
+            const variationParentPath = Array(variationMoveNumber - 1).fill(0);
+            try {
+                kifu.getKyokumen(variationParentPath);
+            } catch {
+                throw new KifParseError(`${lineIndex + 1}行目: 変化の開始位置が存在しません`);
+            }
+
+            activePath = variationParentPath;
+            activeMoveNumber = variationMoveNumber;
+            lastMove = null;
+            continue;
+        }
+
+        const moveMatch = line.match(/^\s*(\d+)\s+(.+?)\s*$/);
+        if (!moveMatch) continue;
+
+        const moveNumber = Number(moveMatch[1]);
+        if (!Number.isInteger(moveNumber) || moveNumber !== activeMoveNumber) {
+            throw new KifParseError(`${lineIndex + 1}行目: 手数が不正です`);
+        }
+
+        const moveText = removeKifTime(moveMatch[2]);
+        if (isKifTerminalLine(moveText)) break;
+
+        const parsed = parseKifMove(moveText, kifu, activePath, activeMoveNumber - 1);
+        const position = kifu.getKyokumen(activePath);
+        if (parsed.promote && !position.canPromote(parsed.fromRow, parsed.fromCol, parsed.toRow)) {
+            throw new KifParseError(`${activeMoveNumber}手目の成りが不正です: ${moveText}`);
+        }
+        if (!parsed.promote && position.isMandatoryPromotion(parsed.fromRow, parsed.fromCol, parsed.toRow)) {
+            throw new KifParseError(`${activeMoveNumber}手目は成りが必要です: ${moveText}`);
+        }
+        const branchIndex = kifu.addSashite(activePath, parsed.fromRow, parsed.fromCol, parsed.toRow, parsed.toCol, parsed.promote);
+        activePath = [...activePath, branchIndex];
+        lastMove = kifu.getSashite(activePath);
+        activeMoveNumber += 1;
+        sawMove = true;
+    }
+
+    if (!sawMove) {
+        throw new KifParseError("KIFに指し手がありません");
+    }
+
+    return kifu;
+}
+
+function removeKifTime(moveText: string): string {
+    return moveText.replace(/\s+\(\s*\d+:\d+\/[^)]*\)\s*$/, "").trim();
+}
+
+function isKifTerminalLine(moveText: string): boolean {
+    return /^(まで|投了|詰み|切れ負け|反則勝ち|反則負け|持将棋|千日手|中断)/.test(moveText);
+}
+
+function parseKifMove(moveText: string, kifu: Kifu, path: number[], moveCount: number): {
+    fromRow: number;
+    fromCol: number;
+    toRow: number;
+    toCol: number;
+    promote: boolean;
+} {
+    const normalized = moveText.replace(/\s/g, "");
+    const targetMatch = normalized.match(/^(同|[１-９1-9][一二三四五六七八九1-9])(.+?)(?:\((\d{2})\))?(打|成|不成)?$/);
+    if (!targetMatch) {
+        throw new KifParseError(`${moveCount + 1}手目を解釈できません: ${moveText}`);
+    }
+
+    const target = targetMatch[1] === "同"
+        ? previousTarget(kifu, path)
+        : parseKifSquare(targetMatch[1]);
+    const rawPieceText = targetMatch[2];
+    const embeddedSuffix = targetMatch[4] === undefined
+        ? rawPieceText.endsWith("不成") ? "不成" : rawPieceText.endsWith("成") ? "成" : ""
+        : "";
+    const suffix = targetMatch[4] ?? embeddedSuffix;
+    const pieceText = embeddedSuffix === "不成"
+        ? rawPieceText.slice(0, -2)
+        : embeddedSuffix === "成"
+            ? rawPieceText.slice(0, -1)
+            : rawPieceText;
+    const pieceKind = parseKifPieceKind(pieceText);
+    const source = targetMatch[3];
+
+    if (suffix === "打") {
+        const owner = moveCount % 2 === 0 ? "Sente" : "Gote";
+        return { fromRow: getFromRow(pieceKind, owner), fromCol: 0, toRow: target.row, toCol: target.col, promote: false };
+    }
+
+    if (!source) {
+        throw new KifParseError(`${moveCount + 1}手目の移動元がありません: ${moveText}`);
+    }
+
+    const sourceSquare = parseKifSquare(source);
+    return {
+        fromRow: sourceSquare.row,
+        fromCol: sourceSquare.col,
+        toRow: target.row,
+        toCol: target.col,
+        promote: suffix === "成",
+    };
+}
+
+function previousTarget(kifu: Kifu, path: number[]): { row: number; col: number } {
+    if (path.length === 0) throw new KifParseError("1手目に「同」は使えません");
+    const previous = kifu.getSashite(path);
+    return { row: previous.toRow, col: previous.toCol };
+}
+
+function parseKifSquare(value: string): { row: number; col: number } {
+    const normalized = normalizeKifDigits(value);
+    if (!/^[1-9][1-9]$/.test(normalized)) {
+        throw new KifParseError(`マス目が不正です: ${value}`);
+    }
+    return { row: Number(normalized[1]) - 1, col: 9 - Number(normalized[0]) };
+}
+
+function normalizeKifDigits(value: string): string {
+    const kanjiRanks = "一二三四五六七八九";
+    const fullWidthDigits = "１２３４５６７８９";
+    return [...value].map((char) => {
+        const kanjiIndex = kanjiRanks.indexOf(char);
+        if (kanjiIndex >= 0) return String(kanjiIndex + 1);
+        const fullWidthIndex = fullWidthDigits.indexOf(char);
+        if (fullWidthIndex >= 0) return String(fullWidthIndex + 1);
+        return char;
+    }).join("");
+}
+
+function parseKifPieceKind(value: string): Exclude<KomaKind, "OU" | "FU+" | "KY+" | "KE+" | "GI+" | "KA+" | "HI+"> {
+    const kind = value.slice(-1);
+    const kinds: Record<string, Exclude<KomaKind, "OU" | "FU+" | "KY+" | "KE+" | "GI+" | "KA+" | "HI+">> = {
+        歩: "FU", 香: "KY", 桂: "KE", 銀: "GI", 金: "KI", 角: "KA", 飛: "HI",
+    };
+    const parsed = kinds[kind];
+    if (!parsed) throw new KifParseError(`駒種が不正です: ${value}`);
+    return parsed;
+}
+
+function applyKifHandicap(kyokumen: Kyokumen, handicap: string): void {
+    const remove = (...squares: string[]) => {
+        for (const square of squares) {
+            const { row, col } = parseKifSquare(square);
+            kyokumen.ban[row][col] = null;
+        }
+    };
+
+    switch (handicap) {
+        case "平手": return;
+        case "香落ち": remove("11"); return;
+        case "右香落ち": remove("91"); return;
+        case "角落ち": remove("22"); return;
+        case "飛車落ち": remove("82"); return;
+        case "飛香落ち": remove("82", "11"); return;
+        case "二枚落ち": remove("82", "22"); return;
+        case "三枚落ち": remove("82", "22", "11"); return;
+        case "四枚落ち": remove("82", "22", "11", "91"); return;
+        case "六枚落ち": remove("82", "22", "11", "91", "31", "71"); return;
+        case "八枚落ち": remove("82", "22", "11", "91", "31", "71", "41", "61"); return;
+        default: throw new KifParseError(`未対応の手合割です: ${handicap}`);
     }
 }
 
